@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server-freemium',
-    version: '6.4.4',
+    version: '7.0.0',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/fhir-vault-server'
 });
