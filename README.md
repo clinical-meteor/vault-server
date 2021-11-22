@@ -1,25 +1,21 @@
-## Symptomatic - Vault Server (The Free Version!)  
+## Vault Server (The Free Version!)  
 
-Welcome to the Symptomatic Vault Server.  
+Welcome to the Node-On-FHIR Vault Server.  This library provides a free FHIR server, and is intended for rapid prototyping of workflows.  
 
-This library provides a free FHIR server, and is intended for rapid prototyping of workflows.   If you need advanced features, such as HIPAA compliance, OAuth security, identity lookups, data pipelining, data-mappings, proxy routing, mesh networking, blockchain, etc... please contact inquiries@symptomatic.io for more information about upgrading to the licensed version.  
+#### HIPAA Compliance & Warantees
 
-
-#### HIPAA Compliance  
-
-This library is for EVALUATION PURPOSES ONLY, and should NOT be used in production.  This library is only HIPAA compliant if it is used entirely behind a VPN firewall.  Otherwise, it does not encrypt data over the wire or at rest, and it does not enforce user authentication or audit logs.  You will need to implement these features yourself.  
+This library is for evaluation purposes only, and comes with no guarantees.  We continue to endeavored to make this library as robust as possible, but at the current time it is only HIPAA compliant if it is used entirely behind a VPN firewall.  Please note that this library does not encrypt data over the wire nor at rest, and it does not enforce user authentication or audit logs.  It does provide FHIR APIs suitable for connectathons.  
 
 
 #### API  
 
 ```bash
 # install the vault server module
-meteor add symptomatic:vault-server-freemium  
+meteor add clinical:vault-server-freemium  
 
 # or run it with a template
-meteor run --extra-packages symptomatic:vault-server-freemium --settings path/to/my/config/settings.json
+meteor run --extra-packages clinical:vault-server-freemium --settings path/to/my/config/settings.json
 ```
-
 
 #### Settings File  
 
@@ -28,7 +24,6 @@ You will want to modify the Meteor.settings file.
 ```json
 {
   "private": {
-    "invitationCode": "Foo",
     "fhir": {
       "disableOauth": true,
       "schemaValidation": {
@@ -83,7 +78,6 @@ You will want to modify the Meteor.settings file.
 #### License  
 All Rights Reserved.  The contents of this repository are available via the Clarified Artistic License.   
 https://spdx.org/licenses/ClArtistic.html  
-
 
 
 
