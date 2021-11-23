@@ -45,7 +45,7 @@ import {
   Questionnaires,
   QuestionnaireResponses,
   Restrictions,
-  RelatedPeson,
+  RelatedPersons,
   RiskAssessments,
   SearchParameters,
   ServiceRequests,
@@ -106,7 +106,7 @@ if(Meteor.isServer){
   Collections.Questionnaires = Questionnaires;
   Collections.QuestionnaireResponses = QuestionnaireResponses;
   Collections.Restrictions = Restrictions;
-  Collections.RelatedPerson = RelatedPerson;
+  Collections.RelatedPersons = RelatedPersons;
   Collections.RiskAssessments = RiskAssessments;
   Collections.SearchParameters = SearchParameters;
   Collections.ServiceRequests = ServiceRequests;
