@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server-freemium',
-    version: '7.0.2',
+    version: '7.1.0',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/fhir-vault-server'
 });
@@ -9,19 +9,21 @@ Package.onUse(function(api) {
     api.versionsFrom('1.0');
 
     // core build
-    api.use('meteor@1.9.3');
-    api.use('webapp@1.10.0');
+    api.use('meteor-base@1.5.1');
+    api.use('webapp@1.13.0');
+    api.use('ecmascript@0.16.0');
+    api.use('react-meteor-data@2.4.0');
+
     api.use('ddp@1.4.0');
     api.use('livedata@1.0.18');
     api.use('es5-shim@4.8.0');
-    api.use('ecmascript@0.15.0');
 
     api.use('check', 'server');
     api.use('meteorhacks:async@1.0.0', 'server');
 
     // database drivers, data cursors
     api.use('mongo');
-    api.use('aldeed:collection2@3.0.0');
+    api.use('aldeed:collection2@3.5.0');
     api.use('matb33:collection-hooks@1.0.1');
     api.use('clinical:extended-api@2.5.0');
 
