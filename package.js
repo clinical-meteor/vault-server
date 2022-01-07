@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '7.2.0',
+    version: '8.0.0',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -36,6 +36,12 @@ Package.onUse(function(api) {
     api.addFiles('FhirServer/Core.js', 'server');
     api.addFiles('FhirServer/Metadata.js', 'server');    
 
+    // OAuth Server
+    api.addFiles('OAuthServer/common.js', ['client', 'server']);
+    api.addFiles('OAuthServer/meteor-model.js', 'server');
+    api.addFiles('OAuthServer/server.js', 'server');
+    api.addFiles('OAuthServer/client.js', 'client');
+
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
 });
@@ -44,4 +50,28 @@ Npm.depends({
     "faker": "5.1.0",
     "express": "4.13.4",
     "body-parser": "1.14.2",
+
+    // oauth server using Express
+    // https://www.npmjs.com/package/oauth2-server
+    "oauth2-server": "3.1.1",
+
+    // https://www.npmjs.com/package/express-oauth-server
+    "express-oauth-server": "2.0.0",
+
+    // oauth2 client; redundant to fhirclient, but usefull
+    // https://www.npmjs.com/package/simple-oauth2
+    "simple-oauth2": "4.3.0",
+
+    // openid client
+    // https://www.npmjs.com/package/openid
+    "openid": "2.0.10",
+
+    // oauth2 middleware for connecting to Asymmetrick FHIR server
+    // https://www.npmjs.com/package/passport-oauth2
+    "passport-oauth2": "1.6.1",
+
+    // openid middleware for connecting to Asymmetrick FHIR server
+    // https://www.npmjs.com/package/passport-openidconnect
+    "passport-openidconnect": "0.1.1"
+
 });
