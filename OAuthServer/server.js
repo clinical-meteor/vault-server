@@ -80,7 +80,7 @@ app.all('/oauth/token', function(data){
   OAuthServerConfig.oauthserver.grant()
 });
 
-WebApp.rawConnectHandlers.use(app);
+// WebApp.rawConnectHandlers.use(app);
 
 
 /////////////////////

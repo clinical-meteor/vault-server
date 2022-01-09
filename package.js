@@ -28,7 +28,7 @@ Package.onUse(function(api) {
     api.use('clinical:extended-api@2.5.0');
 
     // FHIR data layer
-    api.use('simple:json-routes@2.1.0');
+    api.use('simple:json-routes@2.3.1');
     api.use('clinical:hl7-resource-datatypes@4.0.5');
     api.use('clinical:hl7-fhir-data-infrastructure@6.17.0');
 

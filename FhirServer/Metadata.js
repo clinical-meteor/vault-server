@@ -277,6 +277,25 @@ Meteor.startup(function() {
     JsonRoutes.sendResult(res, returnPayload);
   });
 
+  JsonRoutes.add("get", fhirPath + "/.well-known/udap", function (req, res, next) {
+    console.log('========================================================================');
+
+    console.log('GET ' + fhirPath + '/.well-known/udap');
+
+    res.setHeader('Content-type', 'application/json');
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    let returnPayload = {
+      code: 200,
+      data: Server.getWellKnownUdapConfiguration()
+    }
+    if(process.env.TRACE){
+      console.log('return payload', returnPayload);
+    }
+   
+    JsonRoutes.sendResult(res, returnPayload);
+  });
+
   JsonRoutes.add("get", "/.well-known/udap", function (req, res, next) {
     console.log('========================================================================');
 

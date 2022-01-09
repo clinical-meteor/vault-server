@@ -123,12 +123,12 @@ let fhirPath = get(Meteor, 'settings.private.fhir.fhirPath', 'baseR4');
 let fhirVersion = get(Meteor, 'settings.private.fhir.fhirVersion', 'R4');
 let containerAccessToken = get(Meteor, 'settings.private.fhir.accessToken', false);
 
-if(typeof oAuth2Server === 'object'){
+if(typeof OAuthServerConfig === 'object'){
   // TODO:  double check that this is needed; and that the /api/ route is correct
   JsonRoutes.Middleware.use(
     // '/api/*',
     '/baseR4/*',
-    oAuth2Server.oauthserver.authorise()   // OAUTH FLOW - A7.1
+    OAuthServerConfig.oauthserver.authorise()   // OAUTH FLOW - A7.1
   );
 } else {
   console.log("Using the Freemium version of the Vault Server.  OAuth server not installed.  Please contact inquiries@symptomatic.io to purchase a license for our professional version.")
@@ -256,8 +256,8 @@ if(typeof serverRouteManifest === "object"){
           let isAuthorized = false;
 
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof oAuth2Server === 'object'){
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+          if(typeof OAuthServerConfig === 'object'){
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
             //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
@@ -320,8 +320,8 @@ if(typeof serverRouteManifest === "object"){
   
           let isAuthorized = false;
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof oAuth2Server === 'object'){
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+          if(typeof OAuthServerConfig === 'object'){
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
   
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
             //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
@@ -410,8 +410,8 @@ if(typeof serverRouteManifest === "object"){
         let accessTokenStr = get(req, 'params.access_token') || get(req, 'params.access_token');
 
         let isAuthorized = false;
-        if(typeof oAuth2Server === 'object'){
-          let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+        if(typeof OAuthServerConfig === 'object'){
+          let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
           if(accessToken){
             isAuthorized = true;
@@ -533,8 +533,8 @@ if(typeof serverRouteManifest === "object"){
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
         
           let isAuthorized = false;
-          if(typeof oAuth2Server === 'object'){
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+          if(typeof OAuthServerConfig === 'object'){
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
         
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
         
@@ -768,9 +768,9 @@ if(typeof serverRouteManifest === "object"){
 
           let isAuthorized = false;
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof oAuth2Server === 'object'){
+          if(typeof OAuthServerConfig === 'object'){
             
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
             //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
@@ -834,8 +834,8 @@ if(typeof serverRouteManifest === "object"){
 
           let isAuthorized = false;
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof oAuth2Server === 'object'){          
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+          if(typeof OAuthServerConfig === 'object'){          
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
 
@@ -893,8 +893,8 @@ if(typeof serverRouteManifest === "object"){
 
           let isAuthorized = false;
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof oAuth2Server === 'object'){
-            let accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr})
+          if(typeof OAuthServerConfig === 'object'){
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
 

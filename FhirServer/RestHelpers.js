@@ -52,7 +52,7 @@ export const RestHelpers = {
         res.end();
     },
     oauthServerCheck: function(req){
-      if(typeof oAuth2Server !== 'object'){
+      if(typeof OAuthServerConfig !== 'object'){
         // no oAuth server installed; Not Implemented
         JsonRoutes.sendResult(res, {
           code: 501
@@ -61,7 +61,7 @@ export const RestHelpers = {
     },
     returnPostResponseAfterAccessCheck: function(req, res, callback){
       var accessTokenStr = get(req, 'params.access_token') || get(req, 'query.access_token');
-      var accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr});
+      var accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr});
   
       if (accessToken || this.noAuth || this.disableOauth) {
   
@@ -84,7 +84,7 @@ export const RestHelpers = {
     },
     returnGetResponseAfterAccessCheck: function(req, res, callback){
       var accessTokenStr = get(req, 'params.access_token') || get(req, 'query.access_token');
-      var accessToken = oAuth2Server.collections.accessToken.findOne({accessToken: accessTokenStr});
+      var accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr});
   
       if (accessToken || this.noAuth || this.disableOauth) {
   
