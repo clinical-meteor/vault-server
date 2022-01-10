@@ -6,6 +6,7 @@ import moment from 'moment';
 
 let fhirPath = get(Meteor, 'settings.private.fhir.fhirPath');
 
+import jwt from 'jsonwebtoken';
 
 
 let defaultInteractions = [{
@@ -329,11 +330,20 @@ Meteor.startup(function() {
     console.log(req.body)
     console.log("")
 
+    let softwareStatement = get(req, 'body.software_statement');
+    let decodedSoftwareStatement = jwt.decode(softwareStatement);
+
+    console.log('decodedSoftwareStatement', decodedSoftwareStatement);
+
     // couldn't find the registration
-    if(!OAuthClients.findOne({client_name: get(req, 'body.client_name')})){
-      let newRecord = Object.assign({}, req.body);
-      newRecord.createdAt = new Date();
-      newRecord.active = true;
+    if(!OAuthClients.findOne({client_name: get(decodedSoftwareStatement, 'client_name')})){
+
+      // let newRecord = Object.assign({}, req.body);
+      // newRecord.createdAt = new Date();
+      // newRecord.active = true;
+      
+      // UDAP 
+      let newRecord = Object.assign({}, decodedSoftwareStatement);
 
       let clientId = OAuthClients.insert(newRecord);
       console.log('clientId', clientId)
