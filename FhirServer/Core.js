@@ -134,9 +134,9 @@ if(typeof OAuthServerConfig === 'object'){
   console.log("Using the Freemium version of the Vault Server.  OAuth server not installed.  Please contact inquiries@symptomatic.io to purchase a license for our professional version.")
 }
 
-JsonRoutes.setResponseHeaders({
-  "content-type": "application/fhir+json"
-});
+// JsonRoutes.setResponseHeaders({
+//   "content-type": "application/fhir+json"
+// });
 
 
 //==========================================================================================
@@ -156,7 +156,7 @@ JsonRoutes.sendResult = function (res, options) {
     let shouldPrettyPrint = (process.env.NODE_ENV === 'development');
     let spacer = shouldPrettyPrint ? 2 : null;
     // res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, Content-Length, X-Requested-With');
-    res.setHeader('Content-type', 'application/fhir+json');
+    // res.setHeader('Content-type', 'application/fhir+json');
     // res.setHeader('Access-Control-Allow-Origin', "*");
     res.setHeader("Access-Control-Allow-Methods", "PUT, POST, GET, DELETE, PATCH, OPTIONS");
     res.setHeader('Access-Control-Allow-Credentials', 'true');

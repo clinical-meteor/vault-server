@@ -329,6 +329,7 @@ Meteor.startup(function() {
     console.log(req.body)
     console.log("")
 
+    // couldn't find the registration
     if(!OAuthClients.findOne({client_name: get(req, 'body.client_name')})){
       let newRecord = Object.assign({}, req.body);
       newRecord.createdAt = new Date();
@@ -358,8 +359,9 @@ Meteor.startup(function() {
      
       JsonRoutes.sendResult(res, returnPayload);  
     } else {
+      // oops, already found the registration
       JsonRoutes.sendResult(res, {
-        code: 208
+        code: 200
       });  
     }
   });
