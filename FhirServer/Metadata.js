@@ -343,21 +343,26 @@ Meteor.startup(function() {
       // newRecord.active = true;
       
       // UDAP 
-      let newRecord = Object.assign({}, decodedSoftwareStatement);
+      let newRecord = Object.assign({
+        "software_statement": softwareStatement
+      }, decodedSoftwareStatement);
 
       let clientId = OAuthClients.insert(newRecord);
       console.log('clientId', clientId)
       
       let returnPayload = {
         code: 201,
-        data: {
-          "message": 'registration',
+        data:       {
           "client_id": clientId,
-          "scope": ""
-        }
+          "software_statement": softwareStatement,
+          "client_name": get(decodedSoftwareStatement, 'client_name'),
+          "redirect_uris": [get(decodedSoftwareStatement, 'redirect_uris')],
+          "grant_types": get(decodedSoftwareStatement, 'grant_types'),
+          "response_types": get(decodedSoftwareStatement, 'response_types'),
+          "token_endpoint_auth_method": get(decodedSoftwareStatement, 'token_endpoint_auth_method')
+       }
       }
-
-
+      
       if(get(newRecord, 'scope')){
         // console.log('scope: ' + encodeURIComponent(get(newRecord, 'scope')))
         returnPayload.data.scope = encodeURIComponent(get(newRecord, 'scope'));
