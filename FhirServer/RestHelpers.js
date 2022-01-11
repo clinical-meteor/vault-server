@@ -338,6 +338,11 @@ export const RestHelpers = {
         databaseQuery['id'] = get(query, '_id')
       }
 
+      // this seems hot and wild, but useful; monitor accordingly
+      if (get(query, 'extension')) {
+        databaseQuery['extension.url'] = get(query, 'extension')
+      }
+
       // $near support
       // https://github.com/AudaciousInquiry/fhir-saner/issues/23#issuecomment-604809705
       // but https://covid19-under-fhir.smilecdr.com/baseR4/Location?_id=Loc-Org-7313&near=-66.85|18.03|5000|km doesn't find it.
