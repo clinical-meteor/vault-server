@@ -349,24 +349,50 @@ Meteor.startup(function() {
 
       let clientId = OAuthClients.insert(newRecord);
       console.log('clientId', clientId)
-      
+
+      let dataPayload = {
+        "client_id": clientId,
+        "software_statement": softwareStatement
+      }
+
+      if(get(req, 'body.scope'))
+        dataPayload.scope = encodeURIComponent(get(req, 'body.scope'));
+      }
+
+      if(get(decodedSoftwareStatement, 'client_name')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'client_name');
+      }
+      if(get(decodedSoftwareStatement, 'redirect_uris')){
+        dataPayload.client_name = [get(decodedSoftwareStatement, 'redirect_uris')];
+      }
+      if(get(decodedSoftwareStatement, 'grant_types')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'grant_types');
+      }
+      if(get(decodedSoftwareStatement, 'response_types')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'response_types');
+      }
+      if(get(decodedSoftwareStatement, 'token_endpoint_auth_method')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'token_endpoint_auth_method');
+      }
+
+      if(get(decodedSoftwareStatement, 'contacts')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'contacts');
+      }
+      if(get(decodedSoftwareStatement, 'tos_uri')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'tos_uri');
+      }
+      if(get(decodedSoftwareStatement, 'policy_uri')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'policy_uri');
+      }
+      if(get(decodedSoftwareStatement, 'logo_uri')){
+        dataPayload.client_name = get(decodedSoftwareStatement, 'logo_uri');
+      }
+
       let returnPayload = {
         code: 201,
-        data:       {
-          "client_id": clientId,
-          "software_statement": decodedSoftwareStatement,
-          "client_name": get(decodedSoftwareStatement, 'client_name'),
-          "redirect_uris": [get(decodedSoftwareStatement, 'redirect_uris')],
-          "grant_types": get(decodedSoftwareStatement, 'grant_types'),
-          "response_types": get(decodedSoftwareStatement, 'response_types'),
-          "token_endpoint_auth_method": get(decodedSoftwareStatement, 'token_endpoint_auth_method')
-       }
+        data: dataPayload
       }
-      
-      if(get(newRecord, 'scope')){
-        // console.log('scope: ' + encodeURIComponent(get(newRecord, 'scope')))
-        returnPayload.data.scope = encodeURIComponent(get(newRecord, 'scope'));
-      }
+
 
       if(process.env.TRACE){
         console.log('return payload', returnPayload);
