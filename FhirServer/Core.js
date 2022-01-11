@@ -583,16 +583,19 @@ if(typeof serverRouteManifest === "object"){
                 
                 let newlyAssignedId;
         
+                // found existing records; this is an update interaction, not a create interaction
                 if(recordsToUpdate > 0){
                   if(get(Meteor, 'settings.private.debug') === true) { console.log(recordsToUpdate + ' records found...') }
   
-  
+                  // versioned, means we have prior versions and need to add a new one
                   if(get(Meteor, 'settings.private.recordVersioningEnabled')){
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Versioned Collection: Trying to add another versioned record to the main Task collection.') }
   
-                    set(newRecord, 'meta.versionId', recordsToUpdate + 1)
-                    unset(newRecord, '_id')
+                    // lets set a new version ID
+                    set(newRecord, 'meta.versionId', recordsToUpdate + 1);
+                    unset(newRecord, '_id');
       
+                    // and add it to the history
                     newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
@@ -603,31 +606,46 @@ if(typeof serverRouteManifest === "object"){
                           data: error.message
                         });
                       }
-                      if (result) {
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                        res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
+                      if (resultId) {
+                        if(get(Meteor, 'settings.private.trace') === true) { console.log('resultId', resultId); }
+
+                        // this MeasureReport header was used in the SANER specification, I think
+                        // don't remove, but it needs a conditional statement so it's not included on everything else
+                        // res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + resultId);
                         res.setHeader("Last-Modified", new Date());
                         res.setHeader("ETag", fhirVersion);
           
-                        let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
-                        let payload = [];
+                        let createdRecord = Collections[collectionName].findOne({_id: resultId});
           
-                        recordsToUpdate.forEach(function(record){
-                          payload.push(RestHelpers.prepForFhirTransfer(record));
-                        });
-          
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
+                        if(get(Meteor, 'settings.private.trace') === true) { console.log("createdRecord", createdRecord); }
           
                         // success!
                         JsonRoutes.sendResult(res, {
                           code: 200,
-                          data: Bundle.generate(payload)
+                          data: RestHelpers.prepForFhirTransfer(createdRecord)
                         });
+
+                        // let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
+                        // let payload = [];
+          
+                        // recordsToUpdate.forEach(function(record){
+                        //   payload.push(RestHelpers.prepForFhirTransfer(record));
+                        // });
+          
+                        // if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
+          
+                        // // success!
+                        // JsonRoutes.sendResult(res, {
+                        //   code: 200,
+                        //   data: Bundle.generate(payload)
+                        // });
                       }
                     });    
                   } else {
+                    // there's existing records, but we're not a versioned collection
+                    // so we just need to update the record
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Nonversioned Collection: Trying to update the existing record.') }
-                    newlyAssignedId = Collections[collectionName].update({_id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
+                    newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
           
@@ -639,32 +657,53 @@ if(typeof serverRouteManifest === "object"){
                       }
                       if (result) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                        res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
+                        // keep the following; needed for SANER
+                        // needs a conditional clause
+                        // res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
                         res.setHeader("Last-Modified", new Date());
                         res.setHeader("ETag", fhirVersion);
           
-                        let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
-                        let payload = [];
+                        // this isn't a versioned collection, so we expect only a single record
+                        let updatedRecord = Collections[collectionName].findOne({id: req.params.id});
           
-                        recordsToUpdate.forEach(function(record){
-                          payload.push({
-                            fullUrl: Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.fhirPath', 'fhir-3.0.0/') + get(record, 'resourceType') + "/" + get(record, '_id'),
-                            resource: RestHelpers.prepForFhirTransfer(record)
+                        if(updatedRecord){
+                          if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", updatedRecord); }
+          
+                          // success!
+                          JsonRoutes.sendResult(res, {
+                            code: 200,
+                            data: RestHelpers.prepForFhirTransfer(updatedRecord)
                           });
-                        });
+  
+                        } else {
+                          // success!
+                          JsonRoutes.sendResult(res, {
+                            code: 500
+                          });
+                        }
+                        
+                        // let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
+                        // let payload = [];
           
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
+                        // recordsToUpdate.forEach(function(record){
+                        //   payload.push({
+                        //     fullUrl: Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.fhirPath', 'fhir-3.0.0/') + get(record, 'resourceType') + "/" + get(record, '_id'),
+                        //     resource: RestHelpers.prepForFhirTransfer(record)
+                        //   });
+                        // });
           
-                        // success!
-                        JsonRoutes.sendResult(res, {
-                          code: 200,
-                          data: Bundle.generate(payload)
-                        });
+                        // if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
+          
+                        // // success!
+                        // JsonRoutes.sendResult(res, {
+                        //   code: 200,
+                        //   data: Bundle.generate(payload)
+                        // });
                       }
                     });
                   }
                   
-                  
+                // no existing records found, this is a create interaction
                 } else {        
                   if(get(Meteor, 'settings.private.debug') === true) { console.log('No recordsToUpdate found.  Creating one.'); }
   
@@ -673,11 +712,16 @@ if(typeof serverRouteManifest === "object"){
                     set(newRecord, 'meta.versionId', 1)
                   }
   
-                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Core.put().Collections.findOne()', Collections[collectionName].findOne({_id: newRecord._id}));             }
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Core.put().Collections.findOne()', Collections[collectionName].findOne({_id: req.params.id}));             }
+  
   
                   // can't find an existing copy of the record?
-                  if(!Collections[collectionName].findOne({_id: newRecord._id})){
+                  if(!Collections[collectionName].findOne({_id: req.params.id})){
                     // lets create one!
+                    if(get(Meteor, 'settings.private.trace') === true) { 
+                      console.log('newRecord', newRecord); 
+                    }             
+                  
                     newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
@@ -712,7 +756,7 @@ if(typeof serverRouteManifest === "object"){
                     });    
                   } else {
                     
-                    Collections[collectionName].update({_id: newRecord._id}, {$set: newRecord}, schemaValidationConfig, function(error, result){
+                    Collections[collectionName].update({_id: req.params.id}, {$set: newRecord}, schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
           
