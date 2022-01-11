@@ -573,29 +573,29 @@ if(typeof serverRouteManifest === "object"){
               newRecord = RestHelpers.prepForUpdate(newRecord);
       
               if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------'); }
-              if(get(Meteor, 'settings.private.debug') === true) { console.log('Core.put().newRecord', JSON.stringify(newRecord, null, 2));             }
+              if(get(Meteor, 'settings.private.debug') === true) { console.log('Received a new record to PUT into the database', JSON.stringify(newRecord, null, 2));             }
       
 
               if(typeof Collections[collectionName] === "object"){
-                let recordsToUpdate = Collections[collectionName].find({id: req.params.id}).count();
+                let numRecordsToUpdate = Collections[collectionName].find({id: req.params.id}).count();
 
-                if(get(Meteor, 'settings.private.debug') === true) { console.log('Core.put().recordsToUpdate', JSON.stringify(recordsToUpdate, null, 2));             }
+                if(get(Meteor, 'settings.private.debug') === true) { console.log('Number of records found matching the id: ', numRecordsToUpdate); } 
                 
                 let newlyAssignedId;
         
-                // found existing records; this is an update interaction, not a create interaction
-                if(recordsToUpdate > 0){
-                  if(get(Meteor, 'settings.private.debug') === true) { console.log(recordsToUpdate + ' records found...') }
+                if(numRecordsToUpdate > 0){
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Found existing records; this is an update interaction, not a create interaction'); }
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log(numRecordsToUpdate + ' records found...'); }
   
                   // versioned, means we have prior versions and need to add a new one
                   if(get(Meteor, 'settings.private.recordVersioningEnabled')){
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Versioned Collection: Trying to add another versioned record to the main Task collection.') }
   
-                    // lets set a new version ID
-                    set(newRecord, 'meta.versionId', recordsToUpdate + 1);
+                    if(get(Meteor, 'settings.private.debug') === true) { console.log("Lets set a new version ID"); }
+                    set(newRecord, 'meta.versionId', numRecordsToUpdate + 1);
                     unset(newRecord, '_id');
       
-                    // and add it to the history
+                    if(get(Meteor, 'settings.private.debug') === true) { console.log("And add it to the history"); }
                     newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
@@ -642,8 +642,9 @@ if(typeof serverRouteManifest === "object"){
                       }
                     });    
                   } else {
-                    // there's existing records, but we're not a versioned collection
-                    // so we just need to update the record
+                    console.log("There's existing records, but we're not a versioned collection");
+                    console.log("So we just need to update the record");
+
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Nonversioned Collection: Trying to update the existing record.') }
                     newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
                       if (error) {
@@ -705,90 +706,83 @@ if(typeof serverRouteManifest === "object"){
                   
                 // no existing records found, this is a create interaction
                 } else {        
-                  if(get(Meteor, 'settings.private.debug') === true) { console.log('No recordsToUpdate found.  Creating one.'); }
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('No matching records found.  Creating one.'); }
   
                   //newRecord._id = req.params.id;
                   if(get(Meteor, 'settings.private.recordVersioningEnabled')){
                     set(newRecord, 'meta.versionId', 1)
                   }
+
   
-                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Core.put().Collections.findOne()', Collections[collectionName].findOne({_id: req.params.id}));             }
+                  newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, resultId){
+                    if (error) {
+                      if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
+        
+                      // Bad Request
+                      JsonRoutes.sendResult(res, {
+                        code: 400,
+                        data: error.message
+                      });
+                    }
+                    if (resultId) {
+                      if(get(Meteor, 'settings.private.trace') === true) { console.log('resultId', resultId); }
+                      res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + resultId);
+                      res.setHeader("Last-Modified", new Date());
+                      res.setHeader("ETag", fhirVersion);
+        
+                      let updatedRecord = Collections[collectionName].findOne({_id: resultId});
+        
+                      // Created!
+                      JsonRoutes.sendResult(res, {
+                        code: 201,
+                        data: RestHelpers.prepForFhirTransfer(updatedRecord)
+                      });
+                    }
+                  }); 
   
-  
-                  // can't find an existing copy of the record?
-                  if(!Collections[collectionName].findOne({_id: req.params.id})){
-                    // lets create one!
-                    if(get(Meteor, 'settings.private.trace') === true) { 
-                      console.log('newRecord', newRecord); 
-                    }             
+                  // // can't find an existing copy of the record?
+                  // if(!Collections[collectionName].findOne({_id: req.params.id})){
+                  //   // lets create one!
+                  //   if(get(Meteor, 'settings.private.trace') === true) { 
+                  //     console.log('newRecord', newRecord); 
+                  //   }             
                   
-                    newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
-                      if (error) {
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
-          
-                        // Bad Request
-                        JsonRoutes.sendResult(res, {
-                          code: 400,
-                          data: error.message
-                        });
-                      }
-                      if (result) {
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                        res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
-                        res.setHeader("Last-Modified", new Date());
-                        res.setHeader("ETag", fhirVersion);
-          
-                        let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
-                        let payload = [];
-          
-                        recordsToUpdate.forEach(function(record){
-                          payload.push(RestHelpers.prepForFhirTransfer(record));
-                        });
-          
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
-          
-                        // Created!
-                        JsonRoutes.sendResult(res, {
-                          code: 201,
-                          data: Bundle.generate(payload)
-                        });
-                      }
-                    });    
-                  } else {
+                       
+                  // } else {
                     
-                    Collections[collectionName].update({_id: req.params.id}, {$set: newRecord}, schemaValidationConfig, function(error, result){
-                      if (error) {
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
+                  //   Collections[collectionName].update({_id: req.params.id}, {$set: newRecord}, schemaValidationConfig, function(error, result){
+                  //     if (error) {
+                  //       if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
           
-                        // Bad Request
-                        JsonRoutes.sendResult(res, {
-                          code: 400,
-                          data: error.message
-                        });
-                      }
-                      if (result) {
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                        res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
-                        res.setHeader("Last-Modified", new Date());
-                        res.setHeader("ETag", fhirVersion);
+                  //       // Bad Request
+                  //       JsonRoutes.sendResult(res, {
+                  //         code: 400,
+                  //         data: error.message
+                  //       });
+                  //     }
+                  //     if (result) {
+                  //       if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
+                  //       res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
+                  //       res.setHeader("Last-Modified", new Date());
+                  //       res.setHeader("ETag", fhirVersion);
           
-                        let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
-                        let payload = [];
+                  //       let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
+                  //       let payload = [];
           
-                        recordsToUpdate.forEach(function(record){
-                          payload.push(RestHelpers.prepForFhirTransfer(record));
-                        });
+                  //       recordsToUpdate.forEach(function(record){
+                  //         payload.push(RestHelpers.prepForFhirTransfer(record));
+                  //       });
           
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
+                  //       if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
           
-                        // Success!
-                        JsonRoutes.sendResult(res, {
-                          code: 200,
-                          data: Bundle.generate(payload)
-                        });
-                      }
-                    });    
-                  }                    
+                  //       // Success!
+                  //       JsonRoutes.sendResult(res, {
+                  //         code: 200,
+                  //         data: Bundle.generate(payload)
+                  //       });
+                  //     }
+                  //   });    
+                  // }                    
                 }  
               } else {
                 console.log(collectionName + ' collection not found.')
