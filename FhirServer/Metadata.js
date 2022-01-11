@@ -359,33 +359,35 @@ Meteor.startup(function() {
         dataPayload.scope = encodeURIComponent(get(req, 'body.scope'));
       }
 
+      dataPayload.client_uri = get(decodedSoftwareStatement, 'client_uri', Meteor.absoluteUrl());
+
       if(get(decodedSoftwareStatement, 'client_name')){
         dataPayload.client_name = get(decodedSoftwareStatement, 'client_name');
       }
       if(get(decodedSoftwareStatement, 'redirect_uris')){
-        dataPayload.client_name = [get(decodedSoftwareStatement, 'redirect_uris')];
+        dataPayload.redirect_uris = [get(decodedSoftwareStatement, 'redirect_uris')];
       }
       if(get(decodedSoftwareStatement, 'grant_types')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'grant_types');
+        dataPayload.grant_types = get(decodedSoftwareStatement, 'grant_types');
       }
       if(get(decodedSoftwareStatement, 'response_types')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'response_types');
+        dataPayload.response_types = get(decodedSoftwareStatement, 'response_types');
       }
       if(get(decodedSoftwareStatement, 'token_endpoint_auth_method')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'token_endpoint_auth_method');
+        dataPayload.token_endpoint_auth_method = get(decodedSoftwareStatement, 'token_endpoint_auth_method');
       }
 
       if(get(decodedSoftwareStatement, 'contacts')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'contacts');
+        dataPayload.contacts = get(decodedSoftwareStatement, 'contacts');
       }
       if(get(decodedSoftwareStatement, 'tos_uri')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'tos_uri');
+        dataPayload.tos_uri = get(decodedSoftwareStatement, 'tos_uri');
       }
       if(get(decodedSoftwareStatement, 'policy_uri')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'policy_uri');
+        dataPayload.policy_uri = get(decodedSoftwareStatement, 'policy_uri');
       }
       if(get(decodedSoftwareStatement, 'logo_uri')){
-        dataPayload.client_name = get(decodedSoftwareStatement, 'logo_uri');
+        dataPayload.logo_uri = get(decodedSoftwareStatement, 'logo_uri');
       }
 
       let returnPayload = {
