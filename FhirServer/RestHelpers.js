@@ -272,7 +272,7 @@ export const RestHelpers = {
       // FHIR has complicated and unusual rules about dates in order
       // to support situations where a family member might report on a response's
       // date of birth, but not know the year of birth; and the other way around
-      if (response.birthDate) {
+      if (has(response, 'birthDate')) {
         response.birthDate = moment(response.birthDate).format("YYYY-MM-DD");
       }
 
