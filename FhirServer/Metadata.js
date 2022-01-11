@@ -355,7 +355,7 @@ Meteor.startup(function() {
         "software_statement": softwareStatement
       }
 
-      if(get(req, 'body.scope'))
+      if(get(req, 'body.scope')){
         dataPayload.scope = encodeURIComponent(get(req, 'body.scope'));
       }
 
