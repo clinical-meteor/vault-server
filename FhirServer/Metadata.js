@@ -376,7 +376,10 @@ Meteor.startup(function() {
     } else {
       // oops, already found the registration
       JsonRoutes.sendResult(res, {
-        code: 200
+        code: 400,
+        data: {
+          "error": "unapproved_software_statement"
+       }
       });  
     }
   });
