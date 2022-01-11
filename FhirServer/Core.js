@@ -784,10 +784,16 @@ if(typeof serverRouteManifest === "object"){
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             if (Collections[collectionName].find({_id: req.params.id}).count() === 0) {
-              // Gone
+
+              // Not Found
               JsonRoutes.sendResult(res, {
-                code: 410
+                code: 404
               });
+
+              // // Gone
+              // JsonRoutes.sendResult(res, {
+              //   code: 410
+              // });
             } else {
               Collections[collectionName].remove({_id: req.params.id}, function(error, result){
                 if (result) {
