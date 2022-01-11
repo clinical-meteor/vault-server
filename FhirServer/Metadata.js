@@ -361,11 +361,15 @@ Meteor.startup(function() {
 
       dataPayload.client_uri = get(decodedSoftwareStatement, 'client_uri', Meteor.absoluteUrl());
 
+      let redirectUriArray = ["https://vhdir.meteorapp.com"];
+
+      if(get(decodedSoftwareStatement, 'redirect_uris')){
+        redirectUriArray.push(get(decodedSoftwareStatement, 'redirect_uris'));
+      } 
+      dataPayload.redirect_uris = redirectUriArray;
+
       if(get(decodedSoftwareStatement, 'client_name')){
         dataPayload.client_name = get(decodedSoftwareStatement, 'client_name');
-      }
-      if(get(decodedSoftwareStatement, 'redirect_uris')){
-        dataPayload.redirect_uris = [get(decodedSoftwareStatement, 'redirect_uris')];
       }
       if(get(decodedSoftwareStatement, 'grant_types')){
         dataPayload.grant_types = get(decodedSoftwareStatement, 'grant_types');
