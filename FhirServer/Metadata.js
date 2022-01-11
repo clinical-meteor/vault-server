@@ -354,7 +354,7 @@ Meteor.startup(function() {
         code: 201,
         data:       {
           "client_id": clientId,
-          "software_statement": softwareStatement,
+          "software_statement": decodedSoftwareStatement,
           "client_name": get(decodedSoftwareStatement, 'client_name'),
           "redirect_uris": [get(decodedSoftwareStatement, 'redirect_uris')],
           "grant_types": get(decodedSoftwareStatement, 'grant_types'),
