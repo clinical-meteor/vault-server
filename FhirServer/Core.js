@@ -801,7 +801,11 @@ if(typeof serverRouteManifest === "object"){
           }
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-            if (Collections[collectionName].find({_id: req.params.id}).count() === 0) {
+            if(get(Meteor, 'settings.private.trace') === true) { 
+              console.log('Searching ' + collectionName + ' for ' + req.params.id, Collections[collectionName].find({_id: req.params.id}).count()); 
+            }
+
+            if (Collections[collectionName].find({id: req.params.id}).count() === 0) {
 
               // Not Found
               JsonRoutes.sendResult(res, {
@@ -813,7 +817,7 @@ if(typeof serverRouteManifest === "object"){
               //   code: 410
               // });
             } else {
-              Collections[collectionName].remove({_id: req.params.id}, function(error, result){
+              Collections[collectionName].remove({id: req.params.id}, function(error, result){
                 if (result) {
                   // No Content
                   JsonRoutes.sendResult(res, {
