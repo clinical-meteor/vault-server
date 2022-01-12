@@ -454,20 +454,23 @@ Meteor.startup(function() {
       }
       // in the future, but not more than 5 minutes
       console.log('exp', get(decodedSoftwareStatement, 'exp'));
-      console.log('moment(exp)', moment(get(decodedSoftwareStatement, 'exp')));
-      if(get(decodedSoftwareStatement, 'exp') > get(decodedSoftwareStatement, 'iat').add(5, 'min')){
+      console.log('moment(exp).unix', moment.unix(get(decodedSoftwareStatement, 'exp')));
+      if(moment.unix(get(decodedSoftwareStatement, 'exp')) > moment.unix(get(decodedSoftwareStatement, 'iat')).add(5, 'min')){
+        console.log('exp should be in the future, but not more than 5 minutes')
         isValidStatement = true;
       }
       // iat is in the past
       console.log('iat', get(decodedSoftwareStatement, 'iat'));
       console.log('moment()', moment());
-      console.log('moment(iat)', moment(get(decodedSoftwareStatement, 'iat')));
-      if(moment(get(decodedSoftwareStatement, 'iat')) < moment()){
+      console.log('moment(iat).unix', moment.unix(get(decodedSoftwareStatement, 'iat')));
+      if(moment.unix(get(decodedSoftwareStatement, 'iat')) < moment()){
+        console.log('iat should be in the past')
         isValidStatement = true;
       }
       
       // iis is in the past
       if(get(decodedSoftwareStatement, 'iis') === get(decodedSoftwareStatement, 'client_uri')){
+        console.log('iis should be the same as client_uri (?)')
         isValidStatement = true;
       }
 
