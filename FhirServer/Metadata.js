@@ -335,9 +335,25 @@ Meteor.startup(function() {
 
     console.log('decodedSoftwareStatement', decodedSoftwareStatement);
 
-    // couldn't find the registration
-    if(!OAuthClients.findOne({client_name: get(decodedSoftwareStatement, 'client_name')})){
+    // TODO:  generalize to use certs from collection
+    // or to pull from a certificate store
+    // or use a master cert (CMS?)
+    let emrDirectCert = Assets.getText('certs/EMRDirectTestCA.crt');
+    // let validationCert = get(Meteor, 'settings.private.x509.trustCertificate')
+    console.log('emrDirectCert', emrDirectCert);
 
+    // let decodedSoftwareStatement = jwt.validate(softwareStatement, emrDirectCert);
+
+    // couldn't find the registration
+    if(OAuthClients.findOne({client_name: get(decodedSoftwareStatement, 'client_name')})){
+      // oops, already found the registration
+      JsonRoutes.sendResult(res, {
+        code: 400,
+        data: {
+          "error": "unapproved_software_statement"
+        }
+      });  
+    } else {
       // let newRecord = Object.assign({}, req.body);
       // newRecord.createdAt = new Date();
       // newRecord.active = true;
@@ -370,7 +386,7 @@ Meteor.startup(function() {
           redirectUriArray.push(get(decodedSoftwareStatement, 'redirect_uris'));
         }
       } 
-      dataPayload.redirect_uris = redirectUriArray;
+      dataPayload.redirect_uris = redirectUriArray;      
 
       if(get(decodedSoftwareStatement, 'client_name')){
         dataPayload.client_name = get(decodedSoftwareStatement, 'client_name');
@@ -398,26 +414,87 @@ Meteor.startup(function() {
         dataPayload.logo_uri = get(decodedSoftwareStatement, 'logo_uri');
       }
 
+      let hasInvalidMetadata = false;
+      if(!get(decodedSoftwareStatement, 'client_name')){
+        hasInvalidMetadata = true;
+      }
+      if(!get(decodedSoftwareStatement, 'redirect_uris')){
+        hasInvalidMetadata = true;
+      }
+      if(!get(decodedSoftwareStatement, 'grant_types')){
+        hasInvalidMetadata = true;
+      }
+      if(!get(decodedSoftwareStatement, 'response_types')){
+        hasInvalidMetadata = true;
+      }
+      if(!get(decodedSoftwareStatement, 'token_endpoint_auth_method')){
+        hasInvalidMetadata = true;
+      }
+
+
+
+      let isInvalidStatement = false;
+      if(!get(decodedSoftwareStatement, 'iss')){
+        isValidStatement = true;
+      }
+      if(!get(decodedSoftwareStatement, 'sub')){
+        isValidStatement = true;
+      }
+      if(!get(decodedSoftwareStatement, 'aud')){
+        isValidStatement = true;
+      }
+      if(!get(decodedSoftwareStatement, 'exp')){
+        isValidStatement = true;
+      }
+      if(!get(decodedSoftwareStatement, 'iat')){
+        isValidStatement = true;
+      }
+      if(get(decodedSoftwareStatement, 'iss') !== get(decodedSoftwareStatement, 'sub')){
+        isValidStatement = true;
+      }
+      // in the future, but not more than 5 minutes
+      console.log('exp', get(decodedSoftwareStatement, 'exp'));
+      console.log('moment(exp)', moment(get(decodedSoftwareStatement, 'exp')));
+      if(get(decodedSoftwareStatement, 'exp') > get(decodedSoftwareStatement, 'iat').add(5, 'min')){
+        isValidStatement = true;
+      }
+      // iat is in the past
+      console.log('iat', get(decodedSoftwareStatement, 'iat'));
+      console.log('moment()', moment());
+      console.log('moment(iat)', moment(get(decodedSoftwareStatement, 'iat')));
+      if(moment(get(decodedSoftwareStatement, 'iat')) < moment()){
+        isValidStatement = true;
+      }
+      
+      // iis is in the past
+      if(get(decodedSoftwareStatement, 'iis') === get(decodedSoftwareStatement, 'client_uri')){
+        isValidStatement = true;
+      }
+
       let returnPayload = {
         code: 201,
         data: dataPayload
       }
-
+      
+      if(isInvalidStatement){
+        returnPayload.code = 400;
+        returnPayload.data = {
+          "error": "invalid_software_statement"
+        };
+      }   
+      if(hasInvalidMetadata){
+        returnPayload.code = 400;
+        returnPayload.data = {
+          "error": "invalid_client_metadata"
+        };
+      }   
 
       if(process.env.TRACE){
         console.log('return payload', returnPayload);
       }
      
       JsonRoutes.sendResult(res, returnPayload);  
-    } else {
-      // oops, already found the registration
-      JsonRoutes.sendResult(res, {
-        code: 400,
-        data: {
-          "error": "unapproved_software_statement"
-       }
-      });  
-    }
+    } 
   });
   JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
     console.log('========================================================================');

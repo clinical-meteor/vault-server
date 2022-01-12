@@ -324,10 +324,21 @@ if(typeof serverRouteManifest === "object"){
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
           if(typeof OAuthServerConfig === 'object'){
             let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-  
+
+            // GENERATED ACCESS CONTROL LIST
+            // let accessList = someProviderRoleCertStoreLookupAuthorizationScopeFunction(OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr}))
+            // user can access:
+            // their own record
+            // add new certificates
+            // edit company info
+            // edit practitioners
+
             if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
             //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
   
+
+            
+
             if(accessToken){
               isAuthorized = true;
             } else if(accessTokenStr === containerAccessToken){
@@ -888,18 +899,6 @@ if(typeof serverRouteManifest === "object"){
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
 
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-          // // res.setHeader("content-type", "application/fhir+json");
-          // // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-
-          // res.setHeader('Content-type', 'application/json, application/fhir+json');
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-
-          // res.setHeader("Access-Control-Allow-Credentials", "true");
-          // res.setHeader("Access-Control-Max-Age", "1800");
-          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
-
           let isAuthorized = false;
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
           if(typeof OAuthServerConfig === 'object'){          
@@ -915,7 +914,8 @@ if(typeof serverRouteManifest === "object"){
           }
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-            let resourceRecords = [];
+            let matchingRecords = [];
+            let payload = [];
 
             if (req.params.param.includes('_search')) {
               let searchLimit = 1;
@@ -926,13 +926,17 @@ if(typeof serverRouteManifest === "object"){
               let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
 
-              resourceRecords = Collections[collectionName].find(databaseQuery, {limit: searchLimit}).fetch();
-
+              matchingRecords = Collections[collectionName].find(databaseQuery, {limit: searchLimit}).fetch();
+              console.log('matchingRecords', matchingRecords)
+              
               let payload = [];
 
-              resourceRecords.forEach(function(record){
+              matchingRecords.forEach(function(record){
                 payload.push(RestHelpers.prepForFhirTransfer(record));
               });
+            } else if (req.params.param.includes('$match')) {
+              console.log("$MATCH!!!!");
+
             }
 
             // Success

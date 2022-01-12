@@ -42,6 +42,8 @@ Package.onUse(function(api) {
     api.addFiles('OAuthServer/server.js', 'server');
     api.addFiles('OAuthServer/client.js', 'client');
 
+    api.addAssets('certs/EMRDirectTestCA.crt', 'server');
+
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
 });
