@@ -50,6 +50,7 @@ import {
   SearchParameters,
   ServiceRequests,
   StructureDefinitions,
+  Subscriptions,
   Tasks,
   ValueSets,
   VerificationResults,
@@ -111,6 +112,7 @@ if(Meteor.isServer){
   Collections.SearchParameters = SearchParameters;
   Collections.ServiceRequests = ServiceRequests;
   Collections.StructureDefinitions = StructureDefinitions;
+  Collections.Subscriptions = Subscriptions;
   Collections.Tasks = Tasks;
   Collections.ValueSets = ValueSets;
   Collections.VerificationResults = VerificationResults;
@@ -131,12 +133,14 @@ if(typeof OAuthServerConfig === 'object'){
     OAuthServerConfig.oauthserver.authorise()   // OAUTH FLOW - A7.1
   );
 } else {
-  console.log("Using the Freemium version of the Vault Server.  OAuth server not installed.  Please contact inquiries@symptomatic.io to purchase a license for our professional version.")
+  console.log("No OAuthServerConfig found.")
 }
 
 // JsonRoutes.setResponseHeaders({
 //   "content-type": "application/fhir+json"
 // });
+
+
 
 
 //==========================================================================================

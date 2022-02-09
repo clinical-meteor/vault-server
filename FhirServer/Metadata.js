@@ -8,6 +8,8 @@ let fhirPath = get(Meteor, 'settings.private.fhir.fhirPath');
 
 import jwt from 'jsonwebtoken';
 
+import forge from 'node-forge';
+var pki = forge.pki;
 
 let defaultInteractions = [{
   "code": "read"
@@ -331,9 +333,30 @@ Meteor.startup(function() {
     console.log("")
 
     let softwareStatement = get(req, 'body.software_statement');
-    let decodedSoftwareStatement = jwt.decode(softwareStatement);
+    let decoded = jwt.decode(softwareStatement, {complete: true});
 
-    console.log('decodedSoftwareStatement', decodedSoftwareStatement);
+    let decodedSoftwareStatement = decoded.payload;
+
+    console.log('decodedSoftwareStatement', decoded.payload);
+
+    console.log('decodedSoftwareStatement.header', decoded.header);
+
+    let hasIncorrect509 = false;
+    if(!get(decoded, 'header')){
+      hasIncorrect509 = true;
+    }
+    if(!get(decoded.header, 'x5c')){
+      hasIncorrect509 = true;
+    }
+    if(get(decoded.header, 'x5c')){
+      if(Array.isArray(get(decoded.header, 'x5c'))){
+        if(decoded.header.x5c.length === 0){
+          hasIncorrect509 = true;
+        }
+      } else {
+        hasIncorrect509 = true;
+      }
+    }
 
     // TODO:  generalize to use certs from collection
     // or to pull from a certificate store
@@ -342,7 +365,17 @@ Meteor.startup(function() {
     // let validationCert = get(Meteor, 'settings.private.x509.trustCertificate')
     console.log('emrDirectCert', emrDirectCert);
 
-    // let decodedSoftwareStatement = jwt.validate(softwareStatement, emrDirectCert);
+    var emrDirectPublicCert = pki.certificateFromPem(emrDirectCert);
+    console.log('emrDirectPublicCert', emrDirectPublicCert)
+    console.log('emrDirectPublicCert.publicKey', emrDirectPublicCert.publicKey)
+
+    var emrPublicKey = pki.publicKeyToPem(emrDirectPublicCert.publicKey);
+    console.log('emrPublicKey', emrPublicKey)
+
+    let validatedSoftwareStatement = jwt.verify(softwareStatement, emrPublicKey, { algorithms: ['RS256'] },function(error, result){
+      console.log('jwt.validate.error', error)
+      console.log('jwt.validate.result', result)
+    });
 
     // couldn't find the registration
     if(OAuthClients.findOne({client_name: get(decodedSoftwareStatement, 'client_name')})){
@@ -491,6 +524,12 @@ Meteor.startup(function() {
           "error": "invalid_client_metadata"
         };
       }   
+      if(hasIncorrect509){
+        returnPayload.code = 400;
+        returnPayload.data = {
+          "error": "invalid_software_statement"
+        };
+      }
 
       if(process.env.TRACE){
         console.log('return payload', returnPayload);
