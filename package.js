@@ -36,6 +36,9 @@ Package.onUse(function(api) {
     api.addFiles('FhirServer/Core.js', 'server');
     api.addFiles('FhirServer/Metadata.js', 'server');
 
+    api.addFiles('FhirServer/Asymmetrik.js', 'server');
+    api.addFiles('FhirServer/profiles/patient.service.js', 'server');
+
     // OAuth Server
     api.addFiles('OAuthServer/common.js', ['client', 'server']);
     api.addFiles('OAuthServer/meteor-model.js', 'server');
@@ -74,6 +77,8 @@ Npm.depends({
 
     // openid middleware for connecting to Asymmetrick FHIR server
     // https://www.npmjs.com/package/passport-openidconnect
-    "passport-openidconnect": "0.1.1"
+    "passport-openidconnect": "0.1.1",
 
+    // asymmetrik server
+    "@asymmetrik/node-fhir-server-core": "2.0.7"
 });
