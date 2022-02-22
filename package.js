@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.0.20',
+    version: '8.0.21',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -33,6 +33,7 @@ Package.onUse(function(api) {
     api.use('clinical:hl7-fhir-data-infrastructure@6.20.9');
 
     // REST Endpoints
+    api.addFiles('FhirServer/main.js', 'server');
     api.addFiles('FhirServer/Core.js', 'server');
     api.addFiles('FhirServer/Metadata.js', 'server');
 
@@ -46,12 +47,25 @@ Package.onUse(function(api) {
 
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
+
+    api.addFiles('lib/OAuthClients.schema.js', ['client', 'server']);
+
+    api.export('OAuthClient');
+    api.export('OAuthClients');
+    api.export('OAuthClientSchema');
+
+    api.addAssets('data/CodeSystem-operation-outcome.json', 'server');
+    api.addAssets('data/ValueSet-operation-outcome.json', 'server');
 });
 
 Npm.depends({
     "faker": "5.1.0",
     "express": "4.13.4",
     "body-parser": "1.14.2",
+
+    "moment-timezone": "0.5.34",
+    "world-clock": "1.4.0",
+    "@meteorjs/ddp-graceful-shutdown": "0.9.2",
 
     // oauth server using Express
     // https://www.npmjs.com/package/oauth2-server

@@ -248,8 +248,7 @@ export const RestHelpers = {
       }
     
       return record;
-    },
-    
+    }, 
     prepForFhirTransfer: function (response) {
       process.env.TRACE && console.log("RestHelpers.prepForFhirTransfer()");  
 
@@ -320,6 +319,8 @@ export const RestHelpers = {
         });
       }
 
+      process.env.TRACE && console.log("response", response);
+        
       return response;
     },
     generateDatabaseQuery: function(query, resourceType){
@@ -548,6 +549,21 @@ export const RestHelpers = {
     
       process.env.DEBUG && console.log('RestHelpers.generateMongoSearchQuery.jsonQueryObject', databaseQuery);
       return databaseQuery;
+    },
+    generateMongoSearchOptions: function(query, resourceType){
+      let databaseOptions = {
+        limit: get(Meteor, 'private.fhir.publicationLimit', 1000)
+      }
+
+      if(has(query, '_count')){
+        databaseOptions.limit = parseInt(get(query, '_count'))
+      }
+      if(has(query, '_skip')){
+        databaseOptions.skip = parseInt(get(query, '_skip'))
+      }
+
+      console.log('generateMongoSearchOptions().databaseOptions', databaseOptions);
+      return databaseOptions;
     }
   
   }

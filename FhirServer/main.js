@@ -1,5 +1,5 @@
-import '/imports/startup/server';
-import '/imports/api/users/methods';
+// import '/imports/startup/server';
+// import '/imports/api/users/methods';
 
 const { exec } = require('child_process');
 const clock = require('world-clock')()
@@ -8,6 +8,9 @@ import moment from 'moment-timezone';
 import { get } from 'lodash';
 import { DDPGracefulShutdown } from '@meteorjs/ddp-graceful-shutdown';
 import { Meteor } from 'meteor/meteor';
+
+import { CodeSystems, ValueSets } from 'meteor/clinical:hl7-fhir-data-infrastructure';
+
 
 Meteor.startup(function(){
   console.log('Meteor application framework is starting.');
@@ -109,38 +112,38 @@ Meteor.startup(function(){
   }
 
 
-  if(Package['clinical:hipaa-logger']){
-    console.log('HIPAA Logger Infrastructure installed and ready to use.')
+  // if(Package['clinical:hipaa-logger']){
+  //   console.log('HIPAA Logger Infrastructure installed and ready to use.')
 
-    Meteor.call('initializeEventLog')
+  //   Meteor.call('initializeEventLog')
 
-    let startupEvent = {
-      "resourceType" : "AuditEvent",
-      "action" : "Startup", // Type of action performed during the event
-      "recorded" : new Date(), // R!  Time when the event occurred on source
-      "outcome" : "Success", // Whether the event succeeded or failed
-      "outcomeDesc" : "System Started", // Description of the event outcome
-      "agent" : [{ // R!  Actor involved in the event
-        "altId" : "System", // Alternative User id e.g. authentication
-        "name" : "System", // Human-meaningful name for the agent
-        "requestor" : false
-      }],
-      "source" : { // R!  Audit Event Reporter
-        "site" : Meteor.absoluteUrl(), // Logical source location within the enterprise
-      }
-    };
+  //   let startupEvent = {
+  //     "resourceType" : "AuditEvent",
+  //     "action" : "Startup", // Type of action performed during the event
+  //     "recorded" : new Date(), // R!  Time when the event occurred on source
+  //     "outcome" : "Success", // Whether the event succeeded or failed
+  //     "outcomeDesc" : "System Started", // Description of the event outcome
+  //     "agent" : [{ // R!  Actor involved in the event
+  //       "altId" : "System", // Alternative User id e.g. authentication
+  //       "name" : "System", // Human-meaningful name for the agent
+  //       "requestor" : false
+  //     }],
+  //     "source" : { // R!  Audit Event Reporter
+  //       "site" : Meteor.absoluteUrl(), // Logical source location within the enterprise
+  //     }
+  //   };
 
-    HipaaLogger.logEvent(startupEvent, {validate: get(Meteor, 'settings.public.defaults.schemas.validate', false)}, function(error, result){
-      if(error) console.error('HipaaLogger.logEvent.error.invalidKeys', error.invalidKeys)
-      if(result) console.error(result)
-    });      
+  //   HipaaLogger.logEvent(startupEvent, {validate: get(Meteor, 'settings.public.defaults.schemas.validate', false)}, function(error, result){
+  //     if(error) console.error('HipaaLogger.logEvent.error.invalidKeys', error.invalidKeys)
+  //     if(result) console.error(result)
+  //   });      
 
-    // // refactor this to HipaaLogger
-    // if(get(Meteor, 'settings.public.modules.fhir.AuditEvents.enabled')){
-    //   console.log('AuditLog enabled.  Logging application startup.')
-    //   HipaaLogger.logEvent({eventType: "Startup", userId: "System", userName: "System Account"});    
-    // }
-  }
+  //   // // refactor this to HipaaLogger
+  //   // if(get(Meteor, 'settings.public.modules.fhir.AuditEvents.enabled')){
+  //   //   console.log('AuditLog enabled.  Logging application startup.')
+  //   //   HipaaLogger.logEvent({eventType: "Startup", userId: "System", userName: "System Account"});    
+  //   // }
+  // }
 
 
   // Detect the operating system.
@@ -179,7 +182,18 @@ Meteor.startup(function(){
     }
   });
 
+  console.log('Initializing codesystems...');
 
+  let operationOutcomeCodeSystem = JSON.parse(Assets.getText('data/CodeSystem-operation-outcome.json'));
+  if(!CodeSystems.findOne({id: get(operationOutcomeCodeSystem, 'id')})){
+    CodeSystems.insert(operationOutcomeCodeSystem, {filter: false, validate: false})
+  }
+
+  console.log('Initializing valuesets...');
+  let valueSetCodeSystem = JSON.parse(Assets.getText('data/ValueSet-operation-outcome.json'));
+  if(!ValueSets.findOne({id: get(valueSetCodeSystem, 'id')})){
+    ValueSets.insert(valueSetCodeSystem, {filter: false, validate: false})
+  }
 
   console.log('Meteor.startup() completed....');
 })

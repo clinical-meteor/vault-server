@@ -141,7 +141,12 @@ if(typeof OAuthServerConfig === 'object'){
 // });
 
 
-
+// // Meteor.startup(function(){
+// console.log('FhirServer is initializing search parameters...')
+// SearchParameters.find().forEach(function(parameter){
+//   console.log('SearchParameter', get(parameter, 'base.0') + " "+ get(parameter, 'id'))
+// })
+// // })
 
 //==========================================================================================
 // Global Method Overrides
@@ -243,6 +248,10 @@ if(typeof serverRouteManifest === "object"){
     let collectionName = FhirUtilities.pluralizeResourceName(routeResourceType);
     console.log('Setting up routes for the ' + collectionName + ' collection.');
 
+    // console.log('FhirServer is initializing search parameters...')
+    SearchParameters.find({'base': routeResourceType}).forEach(function(parameter){
+      console.log('  SearchParameter: ' + get(parameter, 'id'))
+    })
 
     if(Array.isArray(serverRouteManifest[routeResourceType].interactions)){
       
@@ -250,10 +259,14 @@ if(typeof serverRouteManifest === "object"){
       // https://www.hl7.org/fhir/http.html#read
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
 
-        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
+        let readUrl = "/" + routeResourceType
+        JsonRoutes.add("get", "/" + fhirPath + readUrl, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType, req.query); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET ' + readUrl, req.query); }
   
+
+
+
           // res.setHeader("Access-Control-Allow-Origin", "*");          
           // res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -277,24 +290,38 @@ if(typeof serverRouteManifest === "object"){
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
             let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
+            let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName]', collectionName); }
             if(get(Meteor, 'settings.private.trace') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
 
             let payload = [];
 
             if(Collections[collectionName]){
-              let records = Collections[collectionName].find(databaseQuery).fetch();
+              let totalMatches = Collections[collectionName].find(databaseQuery).count();
+              let records = Collections[collectionName].find(databaseQuery, databaseOptions).fetch();
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
 
+              // payload entries
               records.forEach(function(record){
                 payload.push(RestHelpers.prepForFhirTransfer(record));
               });
+
               if(get(Meteor, 'settings.private.trace') === true) { console.log('payload', payload); }
 
+              // pagination logic
+              let links;
+              if(totalMatches > payload.length){
+                links = [{
+                  "relation": "next",
+                  "url": readUrl + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
+                }]  
+              }
+              
               // Success
               JsonRoutes.sendResult(res, {
                 code: 200,
-                data: Bundle.generate(payload)
+                data: Bundle.generate(payload, "searchset", totalMatches, links)
               });
             } else {
               // Not Implemented
@@ -920,34 +947,89 @@ if(typeof serverRouteManifest === "object"){
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             let matchingRecords = [];
             let payload = [];
+            let searchLimit = 1;
+
+            if (get(req, 'query._count')) {
+              searchLimit = parseInt(get(req, 'query._count'));
+            }
 
             if (req.params.param.includes('_search')) {
-              let searchLimit = 1;
-              if (get(req, 'query._count')) {
-                searchLimit = parseInt(get(req, 'query._count'));
-              }
 
               let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
 
               matchingRecords = Collections[collectionName].find(databaseQuery, {limit: searchLimit}).fetch();
-              console.log('matchingRecords', matchingRecords)
+              console.log('matchingRecords', matchingRecords);
               
               let payload = [];
 
               matchingRecords.forEach(function(record){
                 payload.push(RestHelpers.prepForFhirTransfer(record));
               });
+
+              console.log('payload', payload);
+
+              // Success
+              JsonRoutes.sendResult(res, {
+                code: 200,
+                data: Bundle.generate(payload)
+              });
+
+            //==============================================================================
+            // this is operator logic, and will probably need to go into a switch statement
             } else if (req.params.param.includes('$match')) {
               console.log("$MATCH!!!!");
 
-            }
+              console.log('req.body.name', get(req, 'body.name'));
 
-            // Success
-            JsonRoutes.sendResult(res, {
-              code: 200,
-              data: Bundle.generate(payload)
-            });
+              if(has(req, 'body.name')){
+                matchingRecords = Collections[collectionName].find({name: get(req, 'body.name')}).fetch();
+                console.log('matchingRecords', matchingRecords);
+                
+                let payload = [];
+  
+                matchingRecords.forEach(function(record){
+                  // console.log('record', get(record, 'name'))
+                  payload.push(RestHelpers.prepForFhirTransfer(record));
+                });
+  
+                console.log('payload', payload);
+  
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 200,
+                  data: Bundle.generate(payload)
+                });  
+              } else {
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 400,
+                  data: {
+                    "resourceType": "OperationOutcome",
+                    "severity": "warning",
+                    "code": "invalid",
+                    "details": {
+                      "text": "No Resource found matching the query",
+                      "coding": {
+                        "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
+                        "value": "MSG_NO_MATCH",
+                        "display": "No Resource found matching the query"
+                      }
+                    }                
+                  }
+                });
+              }
+
+            }
+            //==============================================================================
+
+            // console.log('payload', payload);
+
+            // // Success
+            // JsonRoutes.sendResult(res, {
+            //   code: 200,
+            //   data: Bundle.generate(payload)
+            // });
           } else {
             // Unauthorized
             JsonRoutes.sendResult(res, {
