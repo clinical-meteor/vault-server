@@ -845,6 +845,145 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
+
+      // Patch Interaction
+      // https://www.hl7.org/fhir/http.html#update
+      // https://stackoverflow.com/questions/31683075/how-to-do-a-deep-comparison-between-2-objects-with-lodash  
+
+      if(serverRouteManifest[routeResourceType].interactions.includes('patch')){
+        JsonRoutes.add("patch", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
+        
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+
+          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
+        
+          let isAuthorized = false;
+          if(typeof OAuthServerConfig === 'object'){
+            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
+        
+            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
+        
+            if(accessToken){
+              isAuthorized = true;
+            } else if(accessTokenStr === containerAccessToken){
+              isAuthorized = true;
+            }
+          }
+        
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+      
+            
+
+            if (req.body) {
+              let incomingRecord = cloneDeep(req.body);
+      
+              if(get(Meteor, 'settings.private.trace') === true) { console.log('req.body', req.body); }
+      
+              incomingRecord.resourceType = routeResourceType;
+              incomingRecord = RestHelpers.toMongo(incomingRecord);
+              incomingRecord = RestHelpers.prepForUpdate(incomingRecord);
+      
+              if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------'); }
+              if(get(Meteor, 'settings.private.debug') === true) { console.log('Received a new record to PUT into the database', JSON.stringify(newRecord, null, 2));             }
+      
+
+              if(typeof Collections[collectionName] === "object"){
+                let numRecordsToUpdate = Collections[collectionName].find({id: req.params.id}).count();
+
+                if(get(Meteor, 'settings.private.debug') === true) { console.log('Number of records found matching the id: ', numRecordsToUpdate); } 
+                
+                let newlyAssignedId;
+        
+                if(numRecordsToUpdate > 0){
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Found existing records; this is an update interaction, not a create interaction'); }
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log(numRecordsToUpdate + ' records found...'); }
+
+                  console.log('req.query', req.query);
+
+                  let setObjectPatch = {};
+                  Object.keys(req.query).forEach(function(key){
+                    setObjectPatch[key] = get(req.body, key);
+                  })
+
+                  console.log('setObjectPatch', setObjectPatch)
+                  let result = Collections[collectionName].update({id: req.params.id}, {$set: setObjectPatch}, {multi: true});
+
+                  // Unauthorized
+                  JsonRoutes.sendResult(res, {
+                    code: 200,
+                    data: result + " record(s) updated."
+                  });
+
+
+                } else if (numRecordsToUpdate === 1) {
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('Trying to patch an existing record.') }
+
+                  let currentRecord = Collections[collectionName].findOne({id: req.params.id});
+
+                  let patchedRecord = Object.assign(currentRecord, incomingRecord);
+
+                  console.log('patchedRecord', patchedRecord);
+
+                  // newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
+                  //   if (error) {
+                  //     if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
+        
+                  //     // Bad Request
+                  //     JsonRoutes.sendResult(res, {
+                  //       code: 400,
+                  //       data: error.message
+                  //     });
+                  //   }
+                  //   if (result) {
+                  //     if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
+                  //     // keep the following; needed for SANER
+                  //     // needs a conditional clause
+                  //     // res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
+                  //     res.setHeader("Last-Modified", new Date());
+                  //     res.setHeader("ETag", fhirVersion);
+        
+                  //     // this isn't a versioned collection, so we expect only a single record
+                  //     let updatedRecord = Collections[collectionName].findOne({id: req.params.id});
+        
+                  //     if(updatedRecord){
+                  //       if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", updatedRecord); }
+        
+                  //       // success!
+                  //       JsonRoutes.sendResult(res, {
+                  //         code: 200,
+                  //         data: RestHelpers.prepForFhirTransfer(updatedRecord)
+                  //       });
+
+                  //     } else {
+                  //       // success!
+                  //       JsonRoutes.sendResult(res, {
+                  //         code: 500
+                  //       });
+                  //     }                        
+                  //   }
+                  // });
+                }
+              } else {
+                console.log(collectionName + ' collection not found.')
+              }
+            } else {
+              // no body; Unprocessable Entity
+              JsonRoutes.sendResult(res, {
+                code: 422
+              });
+            }
+          } else {
+            // Unauthorized
+            JsonRoutes.sendResult(res, {
+              code: 401
+            });
+          }
+
+        });
+      }
+
       // Delete Interaction
       // https://www.hl7.org/fhir/http.html#delete
       if(serverRouteManifest[routeResourceType].interactions.includes('delete')){
