@@ -48,6 +48,7 @@ Package.onUse(function(api) {
 
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
+    api.addFiles('lib/Base64.js');
 
     api.addFiles('lib/OAuthClients.schema.js', ['client', 'server']);
     api.addFiles('lib/UdapCertificates.schema.js', ['client', 'server']);
@@ -94,6 +95,16 @@ Npm.depends({
 
     // openid middleware for connecting to Asymmetrick FHIR server
     // https://www.npmjs.com/package/passport-openidconnect
-    "passport-openidconnect": "0.1.1"
+    "passport-openidconnect": "0.1.1",
 
+    // x509 encoder / decoder
+    // "asn1.js": "5.4.1",
+    // "@lapo/asn1js": "1.2.3",
+    // "ecdsa-sig-formatter": "1.0.11"
+    // "njwt": "1.2.0",
+    // "asn1js": "2.2.0",
+    // "pkijs": "2.2.2",
+    // "pvutils": "1.1.2",
 });
+
+;
