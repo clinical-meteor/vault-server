@@ -151,47 +151,49 @@ if(typeof OAuthServerConfig === 'object'){
 //==========================================================================================
 // Global Method Overrides
 
-// this is temporary fix until PR 132 can be merged in
-// https://github.com/stubailo/meteor-rest/pull/132
+// // this is temporary fix until PR 132 can be merged in
+// // https://github.com/stubailo/meteor-rest/pull/132
+// // MERGED IN clinical:json-routes
+// // https://github.com/clinical-meteor/node-on-fhir-rest
 
-JsonRoutes.sendResult = function (res, options) {
-  options = options || {};
+// JsonRoutes.sendResult = function (res, options) {
+//   options = options || {};
 
-  // Set status code on response
-  res.statusCode = options.code || 200;
+//   // Set status code on response
+//   res.statusCode = options.code || 200;
 
-  // Set response body
-  if (options.data !== undefined) {
-    let shouldPrettyPrint = (process.env.NODE_ENV === 'development');
-    let spacer = shouldPrettyPrint ? 2 : null;
-    // res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, Content-Length, X-Requested-With');
-    // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-    // res.setHeader('Access-Control-Allow-Origin', "*");
-    res.setHeader("Access-Control-Allow-Methods", "PUT, POST, GET, DELETE, PATCH, OPTIONS");
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Expose-Headers', 'Location, Content-Location');
-    res.setHeader('Cache-Control', 'no-store');
-    res.setHeader('Pragma', 'no-cache');
+//   // Set response body
+//   if (options.data !== undefined) {
+//     let shouldPrettyPrint = (process.env.NODE_ENV === 'development');
+//     let spacer = shouldPrettyPrint ? 2 : null;
+//     // res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, Content-Length, X-Requested-With');
+//     // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+//     // res.setHeader('Access-Control-Allow-Origin', "*");
+//     res.setHeader("Access-Control-Allow-Methods", "PUT, POST, GET, DELETE, PATCH, OPTIONS");
+//     res.setHeader('Access-Control-Allow-Credentials', 'true');
+//     res.setHeader('Access-Control-Expose-Headers', 'Location, Content-Location');
+//     res.setHeader('Cache-Control', 'no-store');
+//     res.setHeader('Pragma', 'no-cache');
 
-    // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-    // res.setHeader("Access-Control-Allow-Credentials", "true");
-    // res.setHeader("Access-Control-Max-Age", "1800");
+//     // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
+//     // res.setHeader("Access-Control-Allow-Credentials", "true");
+//     // res.setHeader("Access-Control-Max-Age", "1800");
 
-    res.write(JSON.stringify(options.data, null, spacer));
-  }
+//     res.write(JSON.stringify(options.data, null, spacer));
+//   }
 
-  // We've already set global headers on response, but if they
-  // pass in more here, we set those.
-  if (options.headers) {
-    //setHeaders(res, options.headers);
-    options.headers.forEach(function(value, key){
-      res.setHeader(key, value);
-    });
-  }
+//   // We've already set global headers on response, but if they
+//   // pass in more here, we set those.
+//   if (options.headers) {
+//     //setHeaders(res, options.headers);
+//     options.headers.forEach(function(value, key){
+//       res.setHeader(key, value);
+//     });
+//   }
 
-  // Send the response
-  res.end();
-};
+//   // Send the response
+//   res.end();
+// };
 
 //==========================================================================================
 // Route Manifest  
@@ -915,7 +917,6 @@ if(typeof serverRouteManifest === "object"){
                     code: 200,
                     data: result + " record(s) updated."
                   });
-
 
                 } else if (numRecordsToUpdate === 1) {
                   if(get(Meteor, 'settings.private.debug') === true) { console.log('Trying to patch an existing record.') }

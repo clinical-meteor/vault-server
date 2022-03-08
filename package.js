@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.1.3',
+    version: '8.1.4',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -28,7 +28,7 @@ Package.onUse(function(api) {
     api.use('clinical:extended-api@2.5.0');
 
     // FHIR data layer
-    api.use('simple:json-routes@2.3.1');
+    api.use('clinical:json-routes@2.2.0');
     api.use('clinical:hl7-resource-datatypes@4.0.5');
     api.use('clinical:hl7-fhir-data-infrastructure@6.20.9');
 
@@ -45,6 +45,7 @@ Package.onUse(function(api) {
     api.addFiles('OAuthServer/client.js', 'client');
 
     api.addAssets('certs/EMRDirectTestCA.crt', 'server');
+    api.addAssets('certs/EMRDirectTestClientSubCA.crt', 'server');
 
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
@@ -66,6 +67,9 @@ Package.onUse(function(api) {
 });
 
 Npm.depends({
+    "axios": "0.21.1",
+    "superagent": "7.1.1",
+
     "faker": "5.1.0",
     "express": "4.13.4",
     "body-parser": "1.14.2",
@@ -98,13 +102,18 @@ Npm.depends({
     "passport-openidconnect": "0.1.1",
 
     // x509 encoder / decoder
-    // "asn1.js": "5.4.1",
+    "asn1.js": "5.4.1",
     // "@lapo/asn1js": "1.2.3",
     // "ecdsa-sig-formatter": "1.0.11"
     // "njwt": "1.2.0",
-    // "asn1js": "2.2.0",
-    // "pkijs": "2.2.2",
-    // "pvutils": "1.1.2",
+    "asn1js": "2.2.0",
+    "pkijs": "2.2.2",
+    "pvutils": "1.1.2",
+
+    "openssl-wrapper": "0.3.4",
+    "bluebird": "3.7.2",
+
+    "node-fetch": "3.2.1"
 });
 
-;
+
