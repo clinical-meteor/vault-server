@@ -302,11 +302,9 @@ export const RestHelpers = {
 
         response.contact.forEach(function(contact){
 
-          console.log("contact", contact);
-
+          // console.log("contact", contact);
 
           if (contact.name && contact.name.resourceType) {
-            //console.log("response.contact.name", contact.name);
             delete contact.name.resourceType;
           }
 
@@ -314,6 +312,9 @@ export const RestHelpers = {
             contact.telecom.forEach(function(telecom){
               delete telecom.resourceType;
             });
+          }
+          if (get(contact, 'address.resourceType')) {
+            delete contact.address.resourceType;
           }
 
         });

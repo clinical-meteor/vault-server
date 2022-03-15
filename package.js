@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.2.0',
+    version: '8.3.1',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -28,7 +28,7 @@ Package.onUse(function(api) {
     api.use('clinical:extended-api@2.5.0');
 
     // FHIR data layer
-    api.use('clinical:json-routes@2.2.0');
+    api.use('clinical:json-routes@2.3.0');
     api.use('clinical:hl7-resource-datatypes@4.0.5');
     api.use('clinical:hl7-fhir-data-infrastructure@6.20.9');
 

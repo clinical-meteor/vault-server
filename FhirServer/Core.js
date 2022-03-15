@@ -342,7 +342,7 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
   
-          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           // res.setHeader("Access-Control-Allow-Origin", "*");
           // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
           // res.setHeader("content-type", "application/fhir+json, application/json");
@@ -400,7 +400,9 @@ if(typeof serverRouteManifest === "object"){
               records.forEach(function(recordVersion){
                 payload.push(RestHelpers.prepForFhirTransfer(recordVersion));
               });  
-  
+
+              res.setHeader("content-type", 'application/fhir+json');
+
               // Success
               JsonRoutes.sendResult(res, {
                 code: 200,
@@ -418,6 +420,8 @@ if(typeof serverRouteManifest === "object"){
               // could we find it?
               if(record){
                 // Success
+                res.setHeader("Content-type", 'application/fhir+json');
+                // res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
                 JsonRoutes.sendResult(res, {
                   code: 200,
                   data: RestHelpers.prepForFhirTransfer(record)
@@ -453,7 +457,7 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           // res.setHeader("Access-Control-Allow-Origin", "*");
           // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-          // // res.setHeader("content-type", "application/fhir+json");
+          // // res.setHeader("content-type", "application/fhir+json;charset=utf-8");
           // res.setHeader('Content-type', 'application/json, application/fhir+json');
           // res.setHeader("Access-Control-Allow-Origin", "*");
 
@@ -534,10 +538,13 @@ if(typeof serverRouteManifest === "object"){
                     }
                     if (result) {
                       if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                      res.setHeader("MeasureReport", fhirPath + "/MeasureReport/" + result);
                       res.setHeader("Last-Modified", new Date());
                       res.setHeader("ETag", fhirVersion);
-                      res.setHeader("Location", "/MeasureReport/" + result);
+
+                      // Re-enable the following for Abacus & SANER
+                      // But document accordingly, and need to include Provenance stamping
+                      // res.setHeader("MeasureReport", fhirPath + "/MeasureReport/" + result);
+                      // res.setHeader("Location", "/MeasureReport/" + result);
   
                       let resourceRecords = Collections[collectionName].find({id: newlyAssignedId});
                       let payload = [];
@@ -548,7 +555,7 @@ if(typeof serverRouteManifest === "object"){
                       
                       if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
   
-                      // success!
+                      // created!
                       JsonRoutes.sendResult(res, {
                         code: 201,
                         data: Bundle.generate(payload)
