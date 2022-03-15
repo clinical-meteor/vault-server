@@ -1,7 +1,7 @@
 
 import http from 'http';
 
-import { get, has, split, map, indexOf } from 'lodash';
+import { get, has, split, map, indexOf, uniq, pullAllBy, cloneDeep, toLower } from 'lodash';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
 import { HTTP } from 'meteor/http';
@@ -12,6 +12,7 @@ import btoa from 'btoa';
 
 import axios from 'axios';
 import superagent from 'superagent';
+
 
 // // import {exec as openssl} from 'openssl-wrapper';
 // import Promise from 'bluebird';
@@ -25,7 +26,9 @@ import fetch from 'node-fetch';
 
 const asn1js = require("asn1js");
 const pkijs = require("pkijs");
-const Certificate = pkijs.Certificate;
+const pvutils = require('pvutils');
+const fs = require('fs');
+
 
 // import Hex from '@lapo/asn1js/hex';
 // import format from 'ecdsa-sig-formatter';
@@ -126,7 +129,7 @@ function parseCertAttributes(certActor){
   }
   return result;
 }
-const fetchCertificate = (url, certificateArray) => {
+const fetchCertificate = (url, certificateArray, callback) => {
   if(!certificateArray){
     certificateArray = [];
   }
@@ -145,13 +148,17 @@ const fetchCertificate = (url, certificateArray) => {
 
         console.log("=================================================================================================")
         const bodyBuffer = Buffer.concat(chunks);
-        console.log('bodyBuffer', bodyBuffer)
+        console.log('Receiving raw .crt buffer (binary DER format) from server: ')
+        console.log('')
+        console.log(bodyBuffer)
+        console.log('')
 
         let shortcutAsn1;
+        let revokationList = [];
         
         try {
           shortcutAsn1 = forge.asn1.fromDer(bodyBuffer.toString('binary'));
-          process.env.DEBUG && console.log('shortcutAsn1', shortcutAsn1)
+          process.env.TRACE && console.log('shortcutAsn1', shortcutAsn1)
         } catch (error) {
           console.log('shortcutCert.error', error);                  
         }   
@@ -159,10 +166,16 @@ const fetchCertificate = (url, certificateArray) => {
         let intermediateCert;
         try {
           intermediateCert = forge.pki.certificateFromAsn1(shortcutAsn1);
-          process.env.DEBUG && console.log('intermediateCert', intermediateCert)
+          process.env.TRACE && console.log('intermediateCert', intermediateCert)
+
+          console.log('intermediateCert.subject:  ', parseCertAttributes(intermediateCert.subject))
+          console.log('intermediateCert.issuer:   ', parseCertAttributes(intermediateCert.issuer))
+          console.log('')
 
           if(intermediateCert){
-            certificateArray.push(intermediateCert)
+            console.log('Adding intermediate cert to caStore and certificateArray.')
+            certificateArray.push(intermediateCert);
+            caStore.addCertificate(intermediateCert);  
           }
         } catch (error) {
           console.log('intermediateCert.error', error);                  
@@ -173,53 +186,178 @@ const fetchCertificate = (url, certificateArray) => {
             intermediateCert.extensions.forEach(async function(extension){
 
               if(get(extension, 'name') === "authorityInfoAccess"){
-                console.log('extension.value: ', extension.value.toString());
+                console.log('Found authority info for the issuer of the certificate.')
+                // console.log('extension.value: ', extension.value.toString());
 
                 let httpIndex = extension.value.toString().indexOf('http');
-                console.log('httpIndex: ', httpIndex);
+                // console.log('httpIndex: ', httpIndex);
                 
                 let recursiveLookupUrl = extension.value.toString().substring(httpIndex);
-                console.log('recursive lookup url: ', recursiveLookupUrl);
+                console.log('Recursive lookup url: ', recursiveLookupUrl);
 
-                let recursiveCert = await fetchCertificate(recursiveLookupUrl, []);
-                process.env.DEBUG && console.log('recursiveCert', recursiveCert)
+                let recursiveCerts = await fetchCertificate(recursiveLookupUrl, certificateArray);
+                process.env.TRACE && console.log('recursiveCerts', recursiveCerts)
                 
 
-                if(Array.isArray(recursiveCert)){
-                  console.log('recursiveCerts', recursiveCert)
-                  recursiveCert.forEach(function(cert){
-                    console.log('recursiveCert.subject:  ', parseCertAttributes(cert.subject))
-                    console.log('recursiveCert.issuer:   ', parseCertAttributes(cert.issuer))  
+                if(Array.isArray(recursiveCerts)){
+                  console.log('recursiveCerts.length', recursiveCerts.length)
+                  // console.log('recursiveCerts', recursiveCerts)
+                  recursiveCerts.forEach(function(cert){
+                    // console.log('recursiveCerts.subject:  ', parseCertAttributes(cert.subject))
+                    // console.log('recursiveCerts.issuer:   ', parseCertAttributes(cert.issuer))  
                     certificateArray.push(cert)
                   })
                 } else {
-                  certificateArray.push(recursiveCert)
+                  console.log('recursiveCerts is not an array');
+                  certificateArray.push(recursiveCerts);
 
-                  console.log('recursiveCert.subject:  ', parseCertAttributes(recursiveCert.subject))
-                  console.log('recursiveCert.issuer:   ', parseCertAttributes(recursiveCert.issuer))
+                  console.log('recursiveCerts.subject:  ', parseCertAttributes(recursiveCerts.subject))
+                  console.log('recursiveCerts.issuer:   ', parseCertAttributes(recursiveCerts.issuer))
             
-                  caStore.addCertificate(recursiveCert);  
+                  caStore.addCertificate(recursiveCerts);  
                 }  
+
+                if(typeof callback === "function"){
+                  callback(null, uniq(certificateArray))
+                }
+                return resolve(uniq(certificateArray));
+              }
+              if(get(extension, 'name') === "cRLDistributionPoints"){
+                console.log('Found URL with revokation info from the issuer.')
+    
+                let httpRevocationIndex = extension.value.toString().indexOf('http');
+                // console.log('httpRevocationIndex: ', httpRevocationIndex);
+    
+                let intermediateCertRevokationUrl = extension.value.toString().substring(httpRevocationIndex);
+                console.log('Intermediate cert revokation url: ', intermediateCertRevokationUrl);
+                console.log('Fetching...')
+                console.log('')
+    
+                revokationList = await fetchRevokationList(intermediateCertRevokationUrl, function(error, result){
+                  if(error) console.log('fetchRevokationList.error', error)
+                  if(result) console.log('fetchRevokationList.result', result)
+                })
+    
+                process.env.DEBUG && console.log('')
+                process.env.DEBUG && console.log("-----Revoked Certificate Serial Numbers-----")
+                process.env.DEBUG && console.log('')
+                process.env.DEBUG && console.log('revokationList', revokationList)
+                process.env.DEBUG && console.log('')
               }
             })
           }
 
-          process.env.DEBUG && console.log('intermediateCert', intermediateCert)
+          process.env.TRACE && console.log('intermediateCert', intermediateCert);
+
         } catch (error) {
           console.log('recursive lookup error', error);                  
         }  
 
-
-
-
-        
-
-        console.log("=================================================================================================")        
+        // console.log("=================================================================================================")        
         return resolve(certificateArray)
       });
     }).on('error', reject);
   });
 };
+
+function fetchRevokationList(revokationUrl){
+  return new Promise((resolve, reject) => {
+    http.get(revokationUrl, res => {
+      const chunks = []
+      // res.setEncoding('utf8');
+      let body = ''; 
+      res.on('data', function(chunk){
+        // console.log('chunk', chunk)
+        chunks.push(chunk)
+        body += chunk;
+        return body;
+      });
+      res.on('end', function(){
+        console.log("=================================================================================================")
+        const bodyBuffer = Buffer.concat(chunks);
+        console.log('Receiving raw .crl data from revokation endpoint: ')
+        console.log('')
+        console.log(bodyBuffer)
+        console.log('')
+  
+        let revokationAsn1;
+        let revokationBuffer;
+        let revokationAsn1crl;
+        let revokationCrl;
+        let revokedSerialNumbers = [];
+
+        try {
+          revokationAsn1 = forge.asn1.fromDer(bodyBuffer.toString('binary'));
+          process.env.TRACE && console.log('revokationAsn1', revokationAsn1)
+        } catch (error) {
+          console.log('shortcutCert.error', error);                  
+        }   
+
+        try {
+          revokationBuffer = new Uint8Array(bodyBuffer).buffer;
+          process.env.TRACE && console.log('revokationBuffer', revokationBuffer)
+        } catch (error) {
+          console.log('revokationBuffer.error', error);                  
+        }  
+
+        try {
+          revokationAsn1crl = asn1js.fromBER(revokationBuffer);
+          process.env.TRACE && console.log('revokationAsn1crl', revokationAsn1crl)
+        } catch (error) {
+          console.log('revokationAsn1crl.error', error);                  
+        }  
+
+        try {
+          revokationCrl = new pkijs.CertificateRevocationList({
+            schema: revokationAsn1crl.result
+          })
+          process.env.TRACE && console.log('revokationCrl', revokationCrl)
+        } catch (error) {
+          console.log('revokationCrl.error', error);                  
+        }  
+        try {
+          if(get(revokationCrl, 'revokedCertificates')){
+            for (const { userCertificate } of revokationCrl.revokedCertificates) {
+              process.env.TRACE && console.log(pvutils.bufferToHexCodes(userCertificate.valueBlock.valueHex))
+              revokedSerialNumbers.push(toLower(pvutils.bufferToHexCodes(userCertificate.valueBlock.valueHex)))
+            }
+            console.log('')  
+          }
+        } catch (error) {
+          console.log('pvutils.bufferToHexCodes.error', error);                  
+        }  
+
+
+        // console.log("=================================================================================================")        
+        return resolve(revokedSerialNumbers)
+      });
+    }).on('error', reject);
+  });
+}
+
+function certificateIsExpired(validity){
+  let isExpired = false;
+
+  if(moment() > moment(get(validity, 'notAfter'))){
+    console.log('Certificate is expired.                      ' + moment().toDate() + ' is greater than ' + moment(get(validity, 'notAfter')).toDate())
+    isExpired = true;
+  } 
+  if(moment() < moment(get(validity, 'notBefore'))){
+    console.log('Certificate is expired.                      ' + moment().toDate() + ' is less than ' + moment(get(validity, 'notBefore')).toDate())
+    isExpired = true;
+  } 
+
+  return isExpired;
+}
+function certificateIsRevoked(serialNumber, revokationList){
+  let isRevoked = false;
+
+  if(revokationList.includes(serialNumber)){
+    isRevoked = true;
+  }
+  
+  return isRevoked;
+}
 
 Meteor.startup(function() {
   console.log('========================================================================');
@@ -228,6 +366,7 @@ Meteor.startup(function() {
 
 
   JsonRoutes.add("post", "/oauth/registration", function (req, res, next) {
+    console.log('========================================================================');
     console.log('========================================================================');
     console.log('POST ' + '/oauth/registration');
 
@@ -251,41 +390,50 @@ Meteor.startup(function() {
     // bottomline:  it's okay to do JsonRoutes.sendResult() at the top level
     //              but don't use it in the async callbacks
 
+    console.log('')
+    console.log('========================================================================');
+    console.log('Decoding the payload and checking headers...');
+    console.log('')
     if(decoded) {
-      console.log('decoded.payload', decoded.payload);
-      console.log('decoded.header', decoded.header);
+      process.env.DEBUG && console.log('decoded.payload', decoded.payload);
+      process.env.DEBUG && console.log('decoded.header', decoded.header);
     
       // UDAPTestTool IIA3a2	- No x5c header  
       if(!get(decoded, 'header')){
-        console.log('header not present...')
+        console.log('header not present... (IIA3a2)')
         // Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "header not present..."}});
-        JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+        JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement", "description": "", "udap_testscript_step": "IIA3a2"}}); 
         // responseSent = true;
       } else {
         if(!get(decoded, 'header.x5c')){
           console.log('header.x5c not present...')
           // Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c not present..."}});
-          JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+          JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c not present...", "udap_testscript_step": "IIA3a2"}}); 
           // responseSent = true;
         } else {
           if(!Array.isArray(get(decoded, 'header.x5c'))){
             console.log('header.x5c is not an array...')
             // Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c is not an array..."}});
-            JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+            JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c is not an array...", "udap_testscript_step": "IIA3a2"}}); 
             // responseSent = true;
           } else {
             if(Array.isArray(get(decoded, 'header.x5c')) && (decoded.header.x5c.length === 0)){
               console.log('header.x5c is an empty array...')
               // Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c is an empty array..."}});
-              JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+              JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement", "description": "header.x5c is an empty array...", "udap_testscript_step": "IIA3a2"}}); 
               // responseSent = true;
             }
           }
         }  
       }
 
+      console.log('')
+      console.log('========================================================================');
+      console.log('Assembling PEM certificate from binary DER buffer...');
+      console.log('')
+
       console.log('decoded.header.x5c[0]', decoded.header.x5c[0]);
-  
+      console.log('')
       
       let softwareStatementPem = "-----BEGIN CERTIFICATE-----\r\n";
       softwareStatementPem += formatPEM(decoded.header.x5c[0]);
@@ -294,309 +442,578 @@ Meteor.startup(function() {
       console.log('softwareStatementPem', softwareStatementPem)
 
 
-      if(decoded.payload){
-        if(!get(decoded.payload, 'iss')){
-          console.log('decoded payload did not contain an iss')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an iss"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
-        if(!get(decoded.payload, 'sub')){
-          console.log('decoded payload did not contain an sub')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an sub"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
-        if(!get(decoded.payload, 'aud')){
-          console.log('decoded payload did not contain an aud')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an aud"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
-        if(!get(decoded.payload, 'exp')){
-          console.log('decoded payload did not contain an exp')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an exp"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
-        if(!get(decoded.payload, 'iat')){
-          console.log('decoded payload did not contain an iat')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an iat"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
-        if(get(decoded.payload, 'iss') !== get(decoded.payload, 'sub')){
-          console.log('decoded payload iss did not equal sub')
-          Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload iss did not equal sub"}});
-          // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
-          // responseSent = true;
-        }
+      // var emrDirectCert = forge.pki.certificateFromPem(emrDirectPem);
+      // // console.log('emrDirectCert', emrDirectCert);
+      // console.log('emrDirectCert.subject:  ', parseCertAttributes(emrDirectCert.subject));
+      // console.log('emrDirectCert.issuer:  ', parseCertAttributes(emrDirectCert.issuer));
+      // // console.log('emrDirectCert.publicKey', emrDirectCert.publicKey);
+      // // console.log('emrDirect certificate: ' + parseCertAttributes(emrDirectCert))
 
-        // RE-ENABLE
-        // UDAPTestTool IIA4a3	- aud equals registration endpoint
-        if(!process.env.TRACE){
-          console.log('registration endpoint: ' + removeTrailingSlash(Meteor.absoluteUrl()) + '/oauth/registration')
-          if(!(get(decoded.payload, 'aud') === removeTrailingSlash(Meteor.absoluteUrl()) + '/oauth/registration')){
-            console.log('decoded payload aud was not set to the current route')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload aud was not set to the current route"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}});           
-            responseSent = true;
-          }  
-        }
+      console.log('========================================================================');
+      console.log('RECEIVED A SOFTWARE STATEMENT WITH CERTIFICATE')
+      console.log('')
 
-        console.log('exp: ' + moment.unix(get(decoded.payload, 'exp')).format("YYYY-MM-DD hh:mm:ss"))
-        console.log('iat: ' + moment.unix(get(decoded.payload, 'iat')).format("YYYY-MM-DD hh:mm:ss"))
-        console.log('now: ' + moment().format("YYYY-MM-DD hh:mm:ss"))
-      }
-
-
-      // // gets the issuer (its certificate) for the given certificate
-      // var issuerCert = caStore.getIssuer(subjectCert);
-      console.log('verifying certificate chain...');
-
-      var emrDirectCert = forge.pki.certificateFromPem(emrDirectPem);
-      // console.log('emrDirectCert', emrDirectCert);
-      console.log('emrDirectCert.issuer:  ', parseCertAttributes(emrDirectCert.issuer));
-      console.log('emrDirectCert.publicKey', emrDirectCert.publicKey);
-      // console.log('emrDirect certificate: ' + parseCertAttributes(emrDirectCert))
-
-      
 
       let certificatesArray = [];
+      let revokationList = [];
 
       var softwareStatementCert = forge.pki.certificateFromPem(softwareStatementPem);
-      console.log('softwareStatementCert.subject:  ', parseCertAttributes(softwareStatementCert.subject))
-      console.log('softwareStatementCert.issuer:   ', parseCertAttributes(softwareStatementCert.issuer))
-      console.log('softwareStatementCert.validity: ', softwareStatementCert.validity)
-      console.log('softwareStatementCert.validity.notAfter', softwareStatementCert.validity.notAfter)
+      console.log('softwareStatementCert.serialNumber:    ', softwareStatementCert.serialNumber)
+      console.log('softwareStatementCert.subject:       ', parseCertAttributes(softwareStatementCert.subject))
+      console.log('softwareStatementCert.issuer:        ', parseCertAttributes(softwareStatementCert.issuer))
+      console.log('')
+      
+      console.log("Adding inbound software statement cert to certificate authority store...")
+      caStore.addCertificate(softwareStatementCert);
 
+      console.log("------------------------------------------------------")
+      console.log("Parsing extensions for URL of the issuing authority...")
       if(get(softwareStatementCert, 'extensions') && Array.isArray(softwareStatementCert.extensions)){
         softwareStatementCert.extensions.forEach(async function(extension){
-          // console.log('extension.name:             ', get(extension, 'name'));
-          // console.log('extension.value:            ', get(extension, 'value'));
-          // console.log('decodeURI(extension.value): ', decodeURI(get(extension, 'value')));
-          
+          process.env.DEBUG && console.log('');
+          process.env.DEBUG && console.log('extension.name:             ', get(extension, 'name'));
+          process.env.DEBUG && console.log('extension.value:            ', get(extension, 'value'));
+          process.env.TRACE && console.log('decodeURI(extension.value): ', decodeURI(get(extension, 'value')));
+          process.env.DEBUG && console.log('');
+
           if(get(extension, 'name') === "authorityInfoAccess"){
-            console.log('extension.value: ', extension.value.toString());
+            console.log('Found authority info for the issuer of the software statement certificate.')
+            // console.log('extension.value: ', extension.value.toString());
 
             let httpIndex = extension.value.toString().indexOf('http');
-            console.log('httpIndex: ', httpIndex);
+            // console.log('httpIndex: ', httpIndex);
             
             let intermediateCertLookupUrl = extension.value.toString().substring(httpIndex);
-            console.log('intermediate cert lookup url: ', intermediateCertLookupUrl);
+            console.log('Intermediate cert lookup url: ', intermediateCertLookupUrl);
+            console.log('Fetching...')
+            console.log('')
+
 
           
-              const intermediateCerts = await fetchCertificate(intermediateCertLookupUrl, certificatesArray);
-              process.env.DEBUG && console.log('intermediateCerts', intermediateCerts)
+            await fetchCertificate(intermediateCertLookupUrl, certificatesArray, function(error, intermediateCerts){
+              console.log('');
+              console.log('intermediateCerts.length', intermediateCerts.length);
+              console.log('');
 
-              if(Array.isArray(intermediateCerts)){
-                console.log('intermediateCertss', intermediateCerts)
-                intermediateCerts.forEach(function(cert){
-                  console.log('intermediateCerts.subject:  ', parseCertAttributes(cert.subject))
-                  console.log('intermediateCerts.issuer:   ', parseCertAttributes(cert.issuer))  
-                  certificatesArray.push(cert)
+              intermediateCerts.forEach(function(cert, index){
+                console.log('intermediateCerts' + index + '.subject:  ', parseCertAttributes(cert.subject))
+                console.log('intermediateCerts' + index + '.issuer:   ', parseCertAttributes(cert.issuer))                    
+                console.log('')
+
+                // cert.extensions.forEach(async function(extension){                  
+                //   if(get(extension, 'name') === "cRLDistributionPoints"){
+                //     console.log('Found URL with revokation info from the issuer.')
+        
+                //     let httpRevocationIndex = extension.value.toString().indexOf('http');
+                //     // console.log('httpRevocationIndex: ', httpRevocationIndex);
+        
+                //     let intermediateCertRevokationUrl = extension.value.toString().substring(httpRevocationIndex);
+                //     console.log('Intermediate cert revokation url: ', intermediateCertRevokationUrl);
+                //     console.log('Fetching...')
+                //     console.log('')
+        
+                //     revokationList = await fetchRevokationList(intermediateCertRevokationUrl, function(error, result){
+                //       if(error) console.log('fetchRevokationList.error', error)
+                //       if(result) console.log('fetchRevokationList.result', result)
+                //     })
+        
+                //     process.env.DEBUG && console.log('')
+                //     process.env.DEBUG && console.log("-----Revoked Certificate Serial Numbers-----")
+                //     process.env.DEBUG && console.log('')
+                //     process.env.DEBUG && console.log('revokationList', revokationList)
+                //     process.env.DEBUG && console.log('')
+                //   }
+                // })
+              })
+
+              console.log("")
+              console.log("==================================================================================")
+              console.log('there are ' + Object.keys(caStore.certs).length + " certificates in the caStore");
+              console.log("")
+              Object.keys(caStore.certs).forEach(function(key){
+                console.log('caStore.certs.id:  ' + key);
+                console.log('caStore.subject:    ' + parseCertAttributes(caStore.certs[key].subject))
+                console.log('caStore.issuer:    ' + parseCertAttributes(caStore.certs[key].issuer))
+                console.log('');
+              })
+
+              console.log("")
+              console.log("==================================================================================")
+              console.log("We can now continue verifying the certificates and certificate chain...")
+              console.log("")
+              // everything after this needs to go into the callback, because it might take a few minutes to look up all the certs
+              console.log('Current time:                         ' + moment().format("YYYY-MM-DD hh:mm:ss"));
+              console.log('softwareStatementCert is valid until: ', get(softwareStatementCert, 'validity.notAfter'));
+
+              // check for expired certificate
+              if(moment.unix(get(softwareStatementCert, 'validity.notAfter')) < moment()){
+                console.log('certificate is expired')
+                Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "exp should be in the future.  this one is in the past."}})
+              } 
+          
+              console.log('verifying the JWT token...')
+          
+              jwt.verify(softwareStatement, softwareStatementPem, { algorithms: ['RS256'] },function(error, verifiedJwt){
+                let token = decoded;
+                if(token && process.env.DEBUG){                  
+                  Object.assign(responsePayload, { data: {
+                    "software_statement_decoded": token
+                  }});
+                }
+
+                
+                if(verifiedJwt){
+                  console.log("jwt verified!")
+                  token = verifiedJwt;                  
+                  Object.assign(responsePayload.data, verifiedJwt)
+                  responsePayload.data.verified = true;
+                  console.log("")
+                  console.log('verifiedJwt', verifiedJwt)
+                  console.log("")
+
+                  // if(decoded.payload){
+                  if(!get(verifiedJwt, 'iss')){
+                    console.log('decoded payload did not contain an iss')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an iss", "udap_testscript_step": "IIA4a1"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'sub')){
+                    console.log('decoded payload did not contain an sub')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an sub"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'aud')){
+                    console.log('decoded payload did not contain an aud')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an aud"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+                    // responseSent = true;
+                  }
+
+                  // exp/iat tests
+                  if(!get(verifiedJwt, 'exp')){
+                    console.log('decoded payload did not contain an exp')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an exp", "udap_testscript_step": "IIA4a4"}});
+                  } else {
+                    console.log('exp.unix(): ' + moment.unix(get(verifiedJwt, 'exp')).format("YYYY-MM-DD hh:mm:ss"));
+                    console.log('iat.unix(): ' + moment.unix(get(verifiedJwt, 'iat')).format("YYYY-MM-DD hh:mm:ss"));
+                    console.log('now():      ' + moment().format("YYYY-MM-DD hh:mm:ss"));
+                      
+                    // in the future
+                    // console.log('moment(exp).unix', moment.unix(get(token, 'exp')));
+                    if(moment.unix(get(verifiedJwt, 'exp')) < moment()){
+                      console.log('exp should be in the future.  this one is in the past.')
+                      Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "exp should be in the future.  this one is in the past.", "udap_testscript_step": "IIA4a4"}})
+                      // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
+                      //responseSent = true;
+                    }
+                    if(!get(verifiedJwt, 'iat')){
+                      console.log('decoded payload did not contain an iat')
+                      Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload did not contain an iat"}});
+                      // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+                      // responseSent = true;
+                    } else {
+                      // but not more than 5 minutes
+                      // console.log('moment(exp).unix', moment.unix(get(token, 'exp')));
+                      if(moment.unix(get(token, 'exp')) < moment.unix(get(verifiedJwt, 'iat')).add(5, 'min')){
+                        let errmsg1 = 'exp should be in the future (but not more than 5 minutes).  This exp is set to: ' + moment.unix(get(verifiedJwt, 'exp')).format("YYYY-MM-DD hh:mm:ss");
+                        console.log(errmsg1)
+                        Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": errmsg1, "udap_testscript_step": "IIA4a4"}})
+                        // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
+                        //responseSent = true;
+                      }
+                      // iat is in the past
+                      // UDAPTestTool - IIA4a5
+                      // console.log('moment(iat).unix', moment.unix(get(verifiedJwt, 'iat')));
+                      if(moment.unix(get(verifiedJwt, 'iat')) > moment()){
+                        console.log('iat should be in the past.  this iat is in the future.')
+                        Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": 'iat should be in the past.  this iat is in the future.', "udap_testscript_step": "IIA4a5"}})
+                        // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
+                        //responseSent = true;
+                      }
+                    }  
+                  }
+                  if(get(verifiedJwt, 'iss') !== get(verifiedJwt, 'sub')){
+                    console.log('decoded payload iss did not equal sub')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload iss did not equal sub", "udap_testscript_step": "IIA4a2"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}}); 
+                    // responseSent = true;
+                  }
+
+                  // RE-ENABLE
+                  // UDAPTestTool IIA4a3	- aud equals registration endpoint
+                  if(!process.env.ALLOW_LOCAL_UDAP_TESTING){
+                    console.log('registration endpoint: ' + removeTrailingSlash(Meteor.absoluteUrl()) + '/oauth/registration')
+                    if(!(get(verifiedJwt, 'aud') === removeTrailingSlash(Meteor.absoluteUrl()) + '/oauth/registration')){
+                      console.log('decoded payload aud was not set to the current route (UDAPTestTool IIA4a3)')
+                      Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": "decoded payload aud was not set to the current route (UDAPTestTool IIA4a3)"}});
+                      // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_software_statement"}});           
+                      responseSent = true;
+                    }  
+                  }
+
+                  console.log('exp: ' + moment.unix(get(verifiedJwt, 'exp')).format("YYYY-MM-DD hh:mm:ss"))
+                  console.log('iat: ' + moment.unix(get(verifiedJwt, 'iat')).format("YYYY-MM-DD hh:mm:ss"))
+                  console.log('now: ' + moment().format("YYYY-MM-DD hh:mm:ss"))
+                //}
+
+
+                  if(!get(verifiedJwt, 'client_name')){
+                    console.log('verified JWT did not have a client_name')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a client_name"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'redirect_uris')){
+                    console.log('verified JWT did not have a redirect_uris')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a redirect_uris"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'grant_types')){
+                    console.log('verified JWT did not have a grant_types')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a grant_types"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'response_types')){
+                    console.log('verified JWT did not have a response_types')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
+                    // responseSent = true;
+                  }
+                  if(!get(verifiedJwt, 'token_endpoint_auth_method')){
+                    console.log('verified JWT did not have a token_endpoint_auth_method')
+                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a token_endpoint_auth_method", "udap_testscript_step":"IIA3a3"}});
+                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
+                    // responseSent = true;
+                  }
+                  
+                  
+                }
+                if(error){
+                  console.log("")
+                  console.log('jwt.verify().error', error)
+           
+                  if(process.env.ALLOW_LOCAL_UDAP_TESTING){
+                    Object.assign(responsePayload, { data: {"description: ": "WARNING:  the following error was suppressed to allow for local testing: " + error}});
+                    console.log('jwt.verify().error: ' + error)  
+                  } else {
+                    Object.assign(responsePayload, { code: 409, data: {"error": "invalid_software_statement", "description": error}});
+                    console.log('jwt.verify().error: ' + error)  
+                  }
+                  responsePayload.data.verified = false;
+                  
+                }
+
+                
+                
+                // SPEC?  Can't find this in the test runner....
+                // // iis equals client uri
+                // if(process.env.ALLOW_LOCAL_UDAP_TESTING){
+                //   if(get(token, 'iis') !== get(token, 'client_uri')){
+                //     console.log('WARNING:  suppressing error (iis should be the same as client_uri) because testing locally')
+                //     Object.assign(responsePayload, { data: {"description": "WARNING:  suppressing error (iis should be the same as client_uri) because testing locally"}})
+                //   }
+                // } else {
+                //   if(get(token, 'iis') !== get(token, 'client_uri')){
+                //     console.log('iis should be the same as client_uri (?)')
+                //     Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "iis should be the same as client_uri (?)"}})
+                //   }
+                // }
+
+
+                // var issuerCert = caStore.getIssuer(softwareStatementCert);
+                // console.log('issuerCert', issuerCert);
+
+                console.log("")
+                console.log("============================================================================")
+                console.log('Now trying to verify the certificate chain....')
+                console.log("")
+
+                console.log("-----Software Statement-----")
+                console.log('softwareStatementCert.subject:    ', parseCertAttributes(softwareStatementCert.subject))
+                console.log('softwareStatementCert.issuer:     ', parseCertAttributes(softwareStatementCert.issuer))
+                console.log("")
+
+                console.log("-----Intermediary Certs-----")
+                if(Array.isArray(intermediateCerts)){
+                  intermediateCerts.forEach(function(certInChain){
+                    console.log('intermediaryCert.serialNumber ', certInChain.serialNumber);
+                    console.log('intermediaryCert.subject:     ' + parseCertAttributes(certInChain.subject))
+                    console.log('intermediaryCert.issuer:      ' + parseCertAttributes(certInChain.issuer))
+                    console.log('');
+                  })
+                  console.log("")
+                }
+                console.log("-----Certificate Authority Store-----")
+                console.log('')
+                Object.keys(caStore.certs).forEach(function(key){
+                  console.log('caStore.certs.id:              ' + key);
+                  console.log('caStore.certs.serialNumber:    ' + caStore.certs[key].serialNumber)
+                  console.log('caStore.certs.subject:         ' + parseCertAttributes(caStore.certs[key].subject))
+                  console.log('caStore.certs.issuer:          ' + parseCertAttributes(caStore.certs[key].issuer))
                 })
-              } else {
-                certificatesArray.push(recursiveCert)
 
-                console.log('intermediateCerts.subject:  ', parseCertAttributes(intermediateCerts.subject))
-                console.log('intermediateCerts.issuer:   ', parseCertAttributes(intermediateCerts.issuer))
+
+                console.log('')
+                console.log("=================================================================================================")
+                console.log("-----Verifying Certificate Chain-----")
+                console.log('')
+                let certificateChain = [softwareStatementCert];
+                let pemChain = [forge.pki.certificateToPem(softwareStatementCert)];
+
+                let previousCert = softwareStatementCert;
+                let hasFoundCertificateAuthority = false;
+                let certOrder = [{
+                  subject: parseCertAttributes(softwareStatementCert.subject),
+                  issuer: parseCertAttributes(softwareStatementCert.issuer)
+                }];
+
+                console.log('softwareStatementCert.serialNumber:         ', softwareStatementCert.serialNumber);
+                console.log('softwareStatementCert.subject:            ', parseCertAttributes(softwareStatementCert.subject));
+                console.log('softwareStatementCert.issuer:             ', parseCertAttributes(softwareStatementCert.issuer));
+                console.log('softwareStatementCert.validity.notBefore:    ' + moment(get(softwareStatementCert, 'validity.notBefore')));
+                console.log('softwareStatementCert.validity.notAfter:     ' + moment(get(softwareStatementCert, 'validity.notAfter')));
+                console.log('softwareStatementCert.moment:                ' + moment());
+                console.log('softwareStatementCert.validity.notBefore:    ' + get(softwareStatementCert, 'validity.notBefore'));
+                console.log('softwareStatementCert.validity.notAfter:     ' + get(softwareStatementCert, 'validity.notAfter'));
+                console.log('softwareStatementCert.now:                   ' + moment().toDate());
+                console.log('softwareStatementCert.isRevoked:             ' + certificateIsRevoked(get(softwareStatementCert, 'serialNumber'), revokationList));
+                console.log('softwareStatementCert.isExpired:             ' + certificateIsExpired(get(softwareStatementCert, 'validity')));
+
+                if(certificateIsRevoked(get(softwareStatementCert, 'serialNumber'), revokationList)){
+                  Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "expired client certificate", "udap_testscript_step": "IIA3b1a"}});
+                }
+                if(certificateIsExpired(get(softwareStatementCert, 'validity'))){
+                  Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "revoked client certificate", "udap_testscript_step": "IIA3b1b"}});
+                }
+
+                // while we haven't found the root certificate authority
+                while (!hasFoundCertificateAuthority) {
+                  // we'll just keep iterating through the intermediary certs
+                  intermediateCerts.forEach(function(intermediary, index){
+                    console.log("")
+
+                    //  
+
+                    // looking for one whose subject matches the previous cert's issuer
+                    if(parseCertAttributes(intermediary.subject) === parseCertAttributes(previousCert.issuer)){
+                      // if we find a match
+                      console.log('Found the certificate for the issuing authority.  (Index ' + index + ")")
+                      console.log('');
+                      console.log('intermediary.serialNumber:         ' + intermediary.serialNumber);
+                      console.log('intermediary.subject:            ' + parseCertAttributes(intermediary.subject))
+                      console.log('intermediary.issuer:             ' + parseCertAttributes(intermediary.issuer))
+                      
+                      // then verify the issuer 
+                      let isVerified = intermediary.verify(previousCert);
+                      console.log('intermediary.isVerified:           ' + isVerified)
+                      if(isVerified){
+
+                        // add the intermediary to the chain
+                        certificateChain.push(cloneDeep(intermediary));
+
+                        pemChain.push(forge.pki.certificateToPem(intermediary))
+
+                        // and a summary to the certOrder object
+                        certOrder.push({
+                          subject: parseCertAttributes(intermediary.subject),
+                          issuer: parseCertAttributes(intermediary.issuer)
+                        })
+
+                        // set it to the previous cert
+                        previousCert = cloneDeep(intermediary);
+
+                        // check to see if it self-authorized and/or is a Certificate Authority
+                        if(parseCertAttributes(intermediary.subject) === parseCertAttributes(intermediary.issuer)){
+                          hasFoundCertificateAuthority = true;
+                          console.log('Found the Certificate Authority!')
+                        }                        
+
+                        // and then remove it from the array of intermediary certs
+                        intermediateCerts = pullAllBy(intermediateCerts, intermediary, 'serialNumber');  
+                      } else {
+                        Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "verified JWT did not have a redirect_uris", "udap_testscript_step": "IIA3b1"}});
+                      }
+                    } else {
+                      console.log('COULD NOT FIND MATCHING CERTIFICATE')
+                      Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "could not find matching issuer certificate", "udap_testscript_step": "IIA3b1"}});
+                    }
+
+                    process.env.TRACE && console.log('intermediary.validity', get(intermediary, 'validity'));
+                    process.env.DEBUG && console.log('intermediary.validity.notBefore:   ' + get(intermediary, 'validity.notBefore'));
+                    process.env.DEBUG && console.log('intermediary.validity.notAfter:    ' + get(intermediary, 'validity.notAfter'));
+                  
+                    process.env.DEBUG && console.log('intermediary.unix.now:             ' + moment());
+                    process.env.DEBUG && console.log('intermediary.unix.notBefore:       ' + moment(get(intermediary, 'validity.notBefore')));
+                    process.env.DEBUG && console.log('intermediary.unix.notAfter:        ' + moment(get(intermediary, 'validity.notAfter')));
+                  
+                    if(certificateIsExpired(get(intermediary, 'validity'))){
+                      console.log('intermediary.isExpired:            ' +  true)
+                      Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "expired client certificate", "udap_testscript_step": "IIA3b1a"}});
+                    } else {
+                      console.log('intermediary.isExpired:            ' +  false)
+                    }
+
+                    if(certificateIsRevoked(get(intermediary, 'serialNumber'), revokationList)){
+                      console.log('intermediary.isRevoked:            ' + true)
+                      Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "could not find matching issuer certificate", "udap_testscript_step": "IIA3b1b"}});
+                    } else {
+                      console.log('intermediary.isRevoked:            ' + false)
+                    }
+
+                    
+                    console.log('');
+                  })
+                  console.log("")
+                  console.log("---------------------------------------------------")
+                  console.log("Response Payload")
+                  console.log(responsePayload)
+                  console.log("")
+                }
+                
+
+                console.log("-----Certificate Order-----")
+                process.env.TRACE && console.log('')
+                process.env.TRACE && console.log(certificateChain)
+                console.log('')
+                console.log(certOrder)
+                console.log('')
+  
+                // console.log("-----PEM Chain-----")
+                // console.log('')
+                // console.log(pemChain)
+                // console.log('')
+
+                let newClientRecord = {
+                  "software_statement": softwareStatement,
+                  "error": get(responsePayload.data, 'error', ''),
+                  "verified": get(responsePayload.data, 'verified', ''),
+                  "created_at": new Date()
+                }
+
+                if (typeof get(responsePayload.data, 'description', '') === "string"){
+                  newClientRecord.description = get(responsePayload.data, 'description', '');
+                }
+
+                process.env.TRACE && console.log('newClientRecord', newClientRecord)
+
+                // store the incoming statement as a field in a new client record
+                let oauthClientRecord = Object.assign(newClientRecord, verifiedJwt);
+
+                process.env.DEBUG && console.log("------------------------------------------------------------")
+                process.env.DEBUG && console.log('')
+                console.log('Generated oauth client record...')
+                process.env.DEBUG && console.log(oauthClientRecord)
           
-                caStore.addCertificate(recursiveCert);  
-              }  
+                let clientId = OAuthClients.insert(oauthClientRecord);
+                console.log('Generated clientId: ' + clientId)
+                console.log('')
+                Object.assign(responsePayload.data, {
+                  "client_id": clientId,
+                  "software_statement": softwareStatement,
+                  "created_at": new Date()
+                })
+
+                // console.log('responsePayload', responsePayload)
+          
+                if(get(req, 'body.scope')){
+                  responsePayload.scope = encodeURIComponent(get(req, 'body.scope'));
+                }
+          
+                responsePayload.client_uri = get(verifiedJwt, 'client_uri', Meteor.absoluteUrl());
+          
+                let redirectUriArray = [Meteor.absoluteUrl()];
+          
+                if(get(verifiedJwt, 'redirect_uris')){
+                  if(Array.isArray(get(verifiedJwt, 'redirect_uris'))){
+                    redirectUriArray = get(verifiedJwt, 'redirect_uris');
+                  } else {
+                    redirectUriArray.push(get(verifiedJwt, 'redirect_uris'));
+                  }
+                } 
+                responsePayload.redirect_uris = redirectUriArray;      
+          
+                process.env.TRACE && console.log('responsePayload', responsePayload)
+
+                // assign fields to top level
+                responsePayload.data.client_name = get(verifiedJwt, 'client_name', '');
+                responsePayload.data.grant_types = get(verifiedJwt, 'grant_types', '');
+                responsePayload.data.response_types = get(verifiedJwt, 'response_types', '');
+                responsePayload.data.token_endpoint_auth_method = get(verifiedJwt, 'token_endpoint_auth_method', '');
+
+                responsePayload.data.contacts = get(verifiedJwt, 'contacts', '');
+                responsePayload.data.tos_uri = get(verifiedJwt, 'tos_uri', '');
+                responsePayload.data.policy_uri = get(verifiedJwt, 'policy_uri', '');
+                responsePayload.data.logo_uri = get(verifiedJwt, 'logo_uri', '');
+
+                responsePayload.data.exp = moment.unix(get(token, 'exp')).format("YYYY-MM-DD hh:mm:ss");
+                responsePayload.data.iat = moment.unix(get(token, 'iat')).format("YYYY-MM-DD hh:mm:ss");          
+
+                console.log('')
+                process.env.DEBUG && console.log("---------------------------------------------------")
+                process.env.DEBUG && console.log('Over-the-Wire Response Payload');
+                process.env.DEBUG && console.log(responsePayload);
+                console.log('')
+
+                JsonRoutes.sendResult(res, responsePayload);   
+
+
+                // try {
+                //   // verifies a certificate chain against a CA store
+                //   forge.pki.verifyCertificateChain(caStore, certificateChain, function(error, result){
+                //     if(error){
+                //       console.log('verifyCertificateChain().error', error)
+                //       Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": error}})
+                //       // JsonRoutes.sendResult(res, Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": error}})); 
+                //     }
+                //     if(result){
+                //       console.log('verifyCertificateChain().result', result)
+                //     }
+                    
+                    
+                //     // JsonRoutes.sendResult(res, responsePayload);   
+                //   });         
+                  
+                // } catch (error) {
+                //   console.log('error', error)
+                // } finally {
+                //   JsonRoutes.sendResult(res, responsePayload);   
+                // }
+              });  
+            });
+          }
+          if(get(extension, 'name') === "cRLDistributionPoints"){
+            console.log('Found URL with revokation info from the issuer.')
+
+            let httpRevocationIndex = extension.value.toString().indexOf('http');
+            // console.log('httpRevocationIndex: ', httpRevocationIndex);
+
+            let intermediateCertRevokationUrl = extension.value.toString().substring(httpRevocationIndex);
+            console.log('Intermediate cert revokation url: ', intermediateCertRevokationUrl);
+            console.log('Fetching...')
+            console.log('')
+
+            revokationList = await fetchRevokationList(intermediateCertRevokationUrl, function(error, result){
+              if(error) console.log('fetchRevokationList.error', error)
+              if(result) console.log('fetchRevokationList.result', result)
+            })
+
+            process.env.DEBUG && console.log('')
+            process.env.DEBUG && console.log("-----Revoked Certificate Serial Numbers-----")
+            process.env.DEBUG && console.log('')
+            process.env.DEBUG && console.log('revokationList', revokationList)
+            process.env.DEBUG && console.log('')
           }
         })
       }
 
-      console.log('');
-      Object.keys(caStore.certs).forEach(function(key){
-        console.log('caStore.certs.id:  ' + key);
-        console.log('caStore.issuer:    ' + parseCertAttributes(caStore.certs[key].issuer))
-        // console.log(caStore.certs[key]);
-        console.log('');
-      })
+      
 
 
-
-
-      console.log('softwareStatementCert.validity.notAfter.unix(): ' + moment.unix(get(softwareStatementCert, 'validity.notAfter')).format("YYYY-MM-DD hh:mm:ss"));
-      console.log('now():      ' + moment().format("YYYY-MM-DD hh:mm:ss"));
-        
-      // check for expired certificate
-      if(moment.unix(get(softwareStatementCert, 'validity.notAfter')) < moment()){
-        console.log('certificate is expired')
-        Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "exp should be in the future.  this one is in the past."}})
-      } 
-  
-      // // TODO:  generalize to use certs from collection
-      // // or to pull from a certificate store
-      // // or use a master cert (CMS?)
-  
-      jwt.verify(softwareStatement, softwareStatementPem, { algorithms: ['RS256'] },function(error, verifiedJwt){
-        if(error){
-          console.log('jwt.verify().error', error)
-  
-          if(!process.env.TRACE){
-            Object.assign(responsePayload, { code: 409, data: {"error": "invalid_software_statement", "description": error}});
-            console.log('jwt.verify().error: ' + error)  
-          }
-        }
-        if(verifiedJwt){
-          Object.assign(responsePayload.data, verifiedJwt)
-          console.log('jwt.verify().verifiedJwt', verifiedJwt)
-    
-          if(!get(verifiedJwt, 'client_name')){
-            console.log('verified JWT did not have a client_name')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a client_name"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-            // responseSent = true;
-          }
-          if(!get(verifiedJwt, 'redirect_uris')){
-            console.log('verified JWT did not have a redirect_uris')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a redirect_uris"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-            // responseSent = true;
-          }
-          if(!get(verifiedJwt, 'grant_types')){
-            console.log('verified JWT did not have a grant_types')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a grant_types"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-            // responseSent = true;
-          }
-          if(!get(verifiedJwt, 'response_types')){
-            console.log('verified JWT did not have a response_types')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-            // responseSent = true;
-          }
-          if(!get(verifiedJwt, 'token_endpoint_auth_method')){
-            console.log('verified JWT did not have a token_endpoint_auth_method')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a token_endpoint_auth_method"}});
-            // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-            // responseSent = true;
-          }
           
-          console.log('exp.unix(): ' + moment.unix(get(verifiedJwt, 'exp')).format("YYYY-MM-DD hh:mm:ss"));
-          console.log('iat.unix(): ' + moment.unix(get(verifiedJwt, 'iat')).format("YYYY-MM-DD hh:mm:ss"));
-          console.log('now():      ' + moment().format("YYYY-MM-DD hh:mm:ss"));
-            
-          // in the future
-          // console.log('moment(exp).unix', moment.unix(get(verifiedJwt, 'exp')));
-          if(moment.unix(get(verifiedJwt, 'exp')) < moment()){
-            console.log('exp should be in the future.  this one is in the past.')
-            Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "exp should be in the future.  this one is in the past."}})
-            // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
-            //responseSent = true;
-          }
-          // but not more than 5 minutes
-          // console.log('moment(exp).unix', moment.unix(get(verifiedJwt, 'exp')));
-          if(moment.unix(get(verifiedJwt, 'exp')) < moment.unix(get(verifiedJwt, 'iat')).add(5, 'min')){
-            let errmsg1 = 'exp should be in the future (but not more than 5 minutes).  This exp is set to: ' + moment.unix(get(verifiedJwt, 'exp')).format("YYYY-MM-DD hh:mm:ss");
-            console.log(errmsg1)
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": errmsg1}})
-            // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
-            //responseSent = true;
-          }
-          // iat is in the past
-          // UDAPTestTool - IIA4a5
-          // console.log('moment(iat).unix', moment.unix(get(verifiedJwt, 'iat')));
-          if(moment.unix(get(verifiedJwt, 'iat')) > moment()){
-            console.log('iat should be in the past.  this iat is in the future.')
-            Object.assign(responsePayload, { code: 400, data: {"error": "invalid_software_statement", "description": 'iat should be in the past.  this iat is in the future.'}})
-            // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
-            //responseSent = true;
-          }
-          
-          // iis is in the past
-          if(get(verifiedJwt, 'iis') === get(verifiedJwt, 'client_uri')){
-            console.log('iis should be the same as client_uri (?)')
-            Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": "iis should be the same as client_uri (?)"}})
-            // JsonRoutes.sendResult(res, { code: 201, data: Object.assign(responsePayload, {"error": "unapproved_software_statement"})});               
-            //responseSent = true;
-          }
-        }
-          var issuerCert = caStore.getIssuer(softwareStatementCert);
-          console.log('issuerCert', issuerCert);
-
-          console.log('softwareStatementCert.subject:  ', parseCertAttributes(softwareStatementCert.subject))
-          console.log('softwareStatementCert.issuer:   ', parseCertAttributes(softwareStatementCert.issuer))
-
-          console.log('emrDirectCert.subject:  ', parseCertAttributes(emrDirectCert.subject))
-          console.log('emrDirectCert.issuer:   ', parseCertAttributes(emrDirectCert.issuer))
-    
-
-          try {
-            // verifies a certificate chain against a CA store
-            forge.pki.verifyCertificateChain(caStore, [softwareStatementCert, emrDirectCert], function(error, result){
-              if(error){
-                console.log('verifyCertificateChain().error', error)
-                Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": error}})
-                // JsonRoutes.sendResult(res, Object.assign(responsePayload, { code: 400, data: {"error": "unapproved_software_statement", "description": error}})); 
-              }
-              if(result){
-                console.log('verifyCertificateChain().result', result)
-              }
-              // UDAP 
-              // store the incoming statement as a field in a new client record
-              let oauthClientRecord = Object.assign({
-                "software_statement": softwareStatement
-              }, verifiedJwt);
-
-              process.env.DEBUG && console.log('Generated oauth client record...', oauthClientRecord)
-        
-              let clientId = OAuthClients.insert(oauthClientRecord);
-              console.log('Generated clientId: ' + clientId)
-        
-              Object.assign(responsePayload.data, {
-                "client_id": clientId,
-                "software_statement": softwareStatement,
-                "created_at": new Date()
-              })
-
-              // console.log('responsePayload', responsePayload)
-        
-              if(get(req, 'body.scope')){
-                responsePayload.scope = encodeURIComponent(get(req, 'body.scope'));
-              }
-        
-              responsePayload.client_uri = get(verifiedJwt, 'client_uri', Meteor.absoluteUrl());
-        
-              let redirectUriArray = [Meteor.absoluteUrl()];
-        
-              if(get(verifiedJwt, 'redirect_uris')){
-                if(Array.isArray(get(verifiedJwt, 'redirect_uris'))){
-                  redirectUriArray = get(verifiedJwt, 'redirect_uris');
-                } else {
-                  redirectUriArray.push(get(verifiedJwt, 'redirect_uris'));
-                }
-              } 
-              responsePayload.redirect_uris = redirectUriArray;      
-        
-              process.env.DEBUG && console.log('responsePayload', responsePayload)
-
-              // responsePayload.client_name = get(verifiedJwt, 'client_name', '');
-              // responsePayload.grant_types = get(verifiedJwt, 'grant_types', '');
-              // responsePayload.response_types = get(verifiedJwt, 'response_types', '');
-              // responsePayload.token_endpoint_auth_method = get(verifiedJwt, 'token_endpoint_auth_method', '');
-
-              // responsePayload.contacts = get(verifiedJwt, 'contacts', '');
-              // responsePayload.tos_uri = get(verifiedJwt, 'tos_uri', '');
-              // responsePayload.policy_uri = get(verifiedJwt, 'policy_uri', '');
-              // responsePayload.logo_uri = get(verifiedJwt, 'logo_uri', '');
-        
-              
-              process.env.TRACE && console.log('response payload', responsePayload);
-              
-              
-              // JsonRoutes.sendResult(res, responsePayload);   
-            });         
-            
-          } catch (error) {
-            console.log('error', error)
-          } finally {
-            JsonRoutes.sendResult(res, responsePayload);   
-          }
-      });      
     } else {
       JsonRoutes.sendResult(res, {
         code: 409,

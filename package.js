@@ -103,13 +103,10 @@ Npm.depends({
 
     // x509 encoder / decoder
     "asn1.js": "5.4.1",
-    // "@lapo/asn1js": "1.2.3",
-    // "ecdsa-sig-formatter": "1.0.11"
-    // "njwt": "1.2.0",
     "asn1js": "2.2.0",
     "pkijs": "2.2.2",
     "pvutils": "1.1.2",
-
+    
     "openssl-wrapper": "0.3.4",
     "bluebird": "3.7.2",
 
