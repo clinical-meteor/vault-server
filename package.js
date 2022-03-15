@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.1.4',
+    version: '8.2.0',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -106,7 +106,7 @@ Npm.depends({
     "asn1js": "2.2.0",
     "pkijs": "2.2.2",
     "pvutils": "1.1.2",
-    
+
     "openssl-wrapper": "0.3.4",
     "bluebird": "3.7.2",
 
