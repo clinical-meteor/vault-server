@@ -151,49 +151,33 @@ if(typeof OAuthServerConfig === 'object'){
 //==========================================================================================
 // Global Method Overrides
 
-// // this is temporary fix until PR 132 can be merged in
-// // https://github.com/stubailo/meteor-rest/pull/132
-// // MERGED IN clinical:json-routes
-// // https://github.com/clinical-meteor/node-on-fhir-rest
+function parseUserAuthorization(req){
+  let isAuthorized = false;
 
-// JsonRoutes.sendResult = function (res, options) {
-//   options = options || {};
+  let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
+  if(typeof OAuthServerConfig === 'object'){
+    let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
-//   // Set status code on response
-//   res.statusCode = options.code || 200;
+    // GENERATED ACCESS CONTROL LIST
+    // let accessList = someProviderRoleCertStoreLookupAuthorizationScopeFunction(OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr}))
+    // user can access:
+    // their own record
+    // add new certificates
+    // edit company info
+    // edit practitioners
 
-//   // Set response body
-//   if (options.data !== undefined) {
-//     let shouldPrettyPrint = (process.env.NODE_ENV === 'development');
-//     let spacer = shouldPrettyPrint ? 2 : null;
-//     // res.setHeader('Access-Control-Allow-Headers', 'Origin, Content-Type, Accept, Authorization, Content-Length, X-Requested-With');
-//     // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-//     // res.setHeader('Access-Control-Allow-Origin', "*");
-//     res.setHeader("Access-Control-Allow-Methods", "PUT, POST, GET, DELETE, PATCH, OPTIONS");
-//     res.setHeader('Access-Control-Allow-Credentials', 'true');
-//     res.setHeader('Access-Control-Expose-Headers', 'Location, Content-Location');
-//     res.setHeader('Cache-Control', 'no-store');
-//     res.setHeader('Pragma', 'no-cache');
+    if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
+    //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); } 
 
-//     // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-//     // res.setHeader("Access-Control-Allow-Credentials", "true");
-//     // res.setHeader("Access-Control-Max-Age", "1800");
+    if(accessToken){
+      isAuthorized = true;
+    } else if(accessTokenStr === containerAccessToken){
+      isAuthorized = true;
+    }
+  }
 
-//     res.write(JSON.stringify(options.data, null, spacer));
-//   }
-
-//   // We've already set global headers on response, but if they
-//   // pass in more here, we set those.
-//   if (options.headers) {
-//     //setHeaders(res, options.headers);
-//     options.headers.forEach(function(value, key){
-//       res.setHeader(key, value);
-//     });
-//   }
-
-//   // Send the response
-//   res.end();
-// };
+  return isAuthorized;
+}
 
 //==========================================================================================
 // Route Manifest  
@@ -262,6 +246,184 @@ if(typeof serverRouteManifest === "object"){
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
 
         let readUrl = "/" + routeResourceType
+        
+
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
+  
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+
+          let isAuthorized = parseUserAuthorization(req);
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+            let record;
+            let lastModified = moment().subtract(100, 'years');
+            let hasVersionedLastModified = false;
+
+            console.log('req.query', req.query)
+            console.log('req.params', req.params)
+
+            let records = Collections[collectionName].find({id: req.params.id});
+            if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+
+            // and generate a Bundle payload
+            payload = [];
+
+            records.forEach(function(recordVersion){
+              payload.push({
+                fullUrl: "Organization/" + get(recordVersion, 'id'),
+                resource: RestHelpers.prepForFhirTransfer(recordVersion)
+              });
+              if(get(recordVersion, 'meta.lastUpdated')){
+                hasVersionedLastModified = true;
+                if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
+                  lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
+                }
+              } 
+            });  
+
+            res.setHeader("content-type", 'application/fhir+json');
+            if(hasVersionedLastModified){
+              res.setHeader("Last-Modified", lastModified.toDate());
+            }
+            
+            // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+
+            // Success
+            JsonRoutes.sendResult(res, {
+              code: 200,
+              data: Bundle.generate(payload)
+            });
+          }
+        });
+
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
+  
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          // res.setHeader("Access-Control-Allow-Origin", "*");
+          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
+          // res.setHeader("content-type", "application/fhir+json, application/json");
+  
+          // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
+  
+          // res.setHeader("Access-Control-Allow-Credentials", "true");
+          // res.setHeader("Access-Control-Max-Age", "1800");
+          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
+  
+          let isAuthorized = parseUserAuthorization(req);
+  
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+            let records;
+            let lastModified = moment().subtract(100, 'years');
+            let hasVersionedLastModified = false;
+
+            console.log('req.query', req.query)
+            console.log('req.params', req.params)
+
+            if(req.params.id === "$export"){
+
+              console.log(collectionName + " records: " + Collections[collectionName].find().count());
+              
+              if(["ndjson", "application/ndjson", "application/fhir+ndjson"].includes(get(req, 'query._outputFormat'))){
+                let ndJsonPayload = "[";
+
+                res.setHeader("content-type", 'application/ndjson');
+                res.setHeader('Content-disposition', 'attachment; filename=' + collectionName + ".ndjson");
+                
+                Collections[collectionName].find().forEach(function(record, index){
+                  res.write( JSON.stringify(RestHelpers.prepForFhirTransfer(record)) + "\n" );                  
+                });  
+
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 202
+                });
+              } else {
+                let jsonPayload = [];
+
+                Collections[collectionName].find().forEach(function(record){
+                  jsonPayload.push(RestHelpers.prepForFhirTransfer(record));
+                });
+  
+                process.env.DEBUG && console.log('jsonPayload', jsonPayload);
+
+                res.setHeader('Content-disposition', 'attachment; filename=' + collectionName + ".fhir");
+
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 200,
+                  data: Bundle.generate(jsonPayload)
+                });
+              }
+            } else {
+
+              records = Collections[collectionName].find({id: req.params.id});
+
+              // plain ol regular approach
+              if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
+  
+              // could we find it?
+              if(records){
+                // Success
+                res.setHeader("Content-type", 'application/fhir+json');
+  
+                if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + '.versioning') === "versioned"){
+                  let lastModified;
+  
+                  if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+  
+                  // and generate a Bundle payload
+                  payload = [];
+  
+                  records.forEach(function(recordVersion){
+                    payload.push({
+                      fullUrl: "Organization/" + get(recordVersion, 'id'),
+                      resource: RestHelpers.prepForFhirTransfer(recordVersion)
+                    });
+                    if(get(recordVersion, 'meta.lastUpdated')){
+                      hasVersionedLastModified = true;
+                      if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
+                        lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
+                      }
+                    } 
+                  });  
+                  
+                  res.setHeader("Last-Modified", lastModified.toDate());
+                }
+  
+                JsonRoutes.sendResult(res, {
+                  code: 200,
+                  data: Bundle.generate(payload)
+                });
+              } else {
+                // Not Found
+                JsonRoutes.sendResult(res, {
+                  code: 404
+                });
+                
+                //   // Gone
+                // JsonRoutes.sendResult(res, {
+                //   code: 410
+                // });
+              }
+            }
+
+            
+                      
+          } else {
+            // Unauthorized
+            JsonRoutes.sendResult(res, {
+              code: 401
+            });
+          }
+        });
+
         JsonRoutes.add("get", "/" + fhirPath + readUrl, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET ' + readUrl, req.query); }
@@ -272,22 +434,10 @@ if(typeof serverRouteManifest === "object"){
           // res.setHeader("Access-Control-Allow-Origin", "*");          
           // res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
 
-          let isAuthorized = false;
-
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof OAuthServerConfig === 'object'){
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-            //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
-
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          } 
+          let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
@@ -338,113 +488,6 @@ if(typeof serverRouteManifest === "object"){
             });
           }
         });
-
-        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
-  
-          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-          // res.setHeader("content-type", "application/fhir+json, application/json");
-  
-          // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-  
-          // res.setHeader("Access-Control-Allow-Credentials", "true");
-          // res.setHeader("Access-Control-Max-Age", "1800");
-          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
-  
-          let isAuthorized = false;
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof OAuthServerConfig === 'object'){
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-            // GENERATED ACCESS CONTROL LIST
-            // let accessList = someProviderRoleCertStoreLookupAuthorizationScopeFunction(OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr}))
-            // user can access:
-            // their own record
-            // add new certificates
-            // edit company info
-            // edit practitioners
-
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-            //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
-  
-
-            
-
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
-  
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
-
-            let record;
-
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
-
-            // are we requesting the entire history of this record?
-            if (req.query.hasOwnProperty('_history')) {
-              console.log('Found a _history')
-
-              // if so, we need to get an array of results
-              let records = Collections[collectionName].find({id: req.params.id});
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
-
-              // and generate a Bundle payload
-              payload = [];
-              records.forEach(function(recordVersion){
-                payload.push(RestHelpers.prepForFhirTransfer(recordVersion));
-              });  
-
-              res.setHeader("content-type", 'application/fhir+json');
-
-              // Success
-              JsonRoutes.sendResult(res, {
-                code: 200,
-                data: Bundle.generate(payload)
-              });
-            } else {
-              // nope, not looking for history, so assume we're just fetching a single record
-
-              record = Collections[collectionName].findOne({id: req.params.id});
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
-
-              // plain ol regular approach
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
-
-              // could we find it?
-              if(record){
-                // Success
-                res.setHeader("Content-type", 'application/fhir+json');
-                // res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
-                JsonRoutes.sendResult(res, {
-                  code: 200,
-                  data: RestHelpers.prepForFhirTransfer(record)
-                });
-              } else {
-                // Not Found
-                JsonRoutes.sendResult(res, {
-                  code: 404
-                });
-                
-                //   // Gone
-                // JsonRoutes.sendResult(res, {
-                //   code: 410
-                // });
-              }
-            }            
-          } else {
-            // Unauthorized
-            JsonRoutes.sendResult(res, {
-              code: 401
-            });
-          }
-        });
       }
 
       // Create Interaction
@@ -455,34 +498,15 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType); }
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-          // // res.setHeader("content-type", "application/fhir+json;charset=utf-8");
-          // res.setHeader('Content-type', 'application/json, application/fhir+json');
-          // res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("ETag", fhirVersion);          
 
-          // // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
+          let accessTokenStr = get(req, 'params.access_token') || get(req, 'params.access_token');
 
-          // res.setHeader("Access-Control-Allow-Credentials", "true");
-          // res.setHeader("Access-Control-Max-Age", "1800");
-          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
+          let isAuthorized = parseUserAuthorization(req);
 
-        let accessTokenStr = get(req, 'params.access_token') || get(req, 'params.access_token');
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
-        let isAuthorized = false;
-        if(typeof OAuthServerConfig === 'object'){
-          let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-          if(accessToken){
-            isAuthorized = true;
-          } else if(accessTokenStr === containerAccessToken){
-            isAuthorized = true;
-          }
-        }
-
-        if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-
-        //------------------------------------------------------------------------------------------------
+          //------------------------------------------------------------------------------------------------
 
           if (req.body) {
             newRecord = req.body;
@@ -494,7 +518,9 @@ if(typeof serverRouteManifest === "object"){
             // https://www.hl7.org/fhir/http.html#create            
 
             if(get(newRecord, 'meta.versionId')){
-              set(newRecord, 'meta.versionId', newRecord.meta.versionId + 1);
+              set(newRecord, 'meta.versionId', (parseInt(newRecord.meta.versionId) + 1).toString());
+            } else {
+              set(newRecord, 'meta.versionId', "1");
             }
             if(get(newRecord, 'meta.lastUpdated')){
               set(newRecord, 'meta.lastUpdated', new Date());
@@ -594,21 +620,11 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
 
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
         
-          let isAuthorized = false;
-          if(typeof OAuthServerConfig === 'object'){
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-        
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-        
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
+          let isAuthorized = parseUserAuthorization(req);
         
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
       
@@ -638,16 +654,20 @@ if(typeof serverRouteManifest === "object"){
                   if(get(Meteor, 'settings.private.debug') === true) { console.log('Found existing records; this is an update interaction, not a create interaction'); }
                   if(get(Meteor, 'settings.private.debug') === true) { console.log(numRecordsToUpdate + ' records found...'); }
   
+                  // don't need to send internal _ids
+                  unset(newRecord, '_id');
+
                   // versioned, means we have prior versions and need to add a new one
                   if(get(Meteor, 'settings.private.recordVersioningEnabled')){
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Versioned Collection: Trying to add another versioned record to the main Task collection.') }
   
                     if(get(Meteor, 'settings.private.debug') === true) { console.log("Lets set a new version ID"); }
-                    set(newRecord, 'meta.versionId', numRecordsToUpdate + 1);
-                    unset(newRecord, '_id');
+                    if(!get(newRecord, 'meta.versionId')){
+                      set(newRecord, 'meta.versionId', (numRecordsToUpdate + 1).toString());  
+                    }
       
                     if(get(Meteor, 'settings.private.debug') === true) { console.log("And add it to the history"); }
-                    newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
+                    newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, resultId){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
           
@@ -664,7 +684,7 @@ if(typeof serverRouteManifest === "object"){
                         // don't remove, but it needs a conditional statement so it's not included on everything else
                         // res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + resultId);
                         res.setHeader("Last-Modified", new Date());
-                        res.setHeader("ETag", fhirVersion);
+                        
           
                         let createdRecord = Collections[collectionName].findOne({_id: resultId});
           
@@ -759,11 +779,11 @@ if(typeof serverRouteManifest === "object"){
                 } else {        
                   if(get(Meteor, 'settings.private.debug') === true) { console.log('No matching records found.  Creating one.'); }
   
-                  //newRecord._id = req.params.id;
-                  if(get(Meteor, 'settings.private.recordVersioningEnabled')){
-                    set(newRecord, 'meta.versionId', 1)
+                  if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + '.versioning') === "versioned"){
+                    set(newRecord, 'meta.versionId', "1")
                   }
 
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log(newRecord); }
   
                   newlyAssignedId = Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, resultId){
                     if (error) {
@@ -865,25 +885,13 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
 
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
         
-          let isAuthorized = false;
-          if(typeof OAuthServerConfig === 'object'){
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
+          let isAuthorized = parseUserAuthorization(req);
         
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-        
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
-        
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-      
-            
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {            
 
             if (req.body) {
               let incomingRecord = cloneDeep(req.body);
@@ -1000,6 +1008,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('DELETE /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
 
           // res.setHeader("Access-Control-Allow-Origin", "*");
           // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
@@ -1011,21 +1020,22 @@ if(typeof serverRouteManifest === "object"){
           // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
 
 
-          let isAuthorized = false;
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof OAuthServerConfig === 'object'){
+          // let isAuthorized = false;
+          // let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
+          // if(typeof OAuthServerConfig === 'object'){
             
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
+          //   let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-            //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
+          //   if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
+          //   //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
 
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
+          //   if(accessToken){
+          //     isAuthorized = true;
+          //   } else if(accessTokenStr === containerAccessToken){
+          //     isAuthorized = true;
+          //   }
+          // }
+          let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             if(get(Meteor, 'settings.private.trace') === true) { 
@@ -1076,20 +1086,22 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)); }
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
 
-          let isAuthorized = false;
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof OAuthServerConfig === 'object'){          
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
+          // let isAuthorized = false;
+          // let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
+          // if(typeof OAuthServerConfig === 'object'){          
+          //   let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
 
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
+          //   if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
 
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
+          //   if(accessToken){
+          //     isAuthorized = true;
+          //   } else if(accessTokenStr === containerAccessToken){
+          //     isAuthorized = true;
+          //   }
+          // }
+          let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             let matchingRecords = [];
@@ -1167,7 +1179,7 @@ if(typeof serverRouteManifest === "object"){
                 });
               }
 
-            }
+            } 
             //==============================================================================
 
             // console.log('payload', payload);
@@ -1198,19 +1210,7 @@ if(typeof serverRouteManifest === "object"){
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           
-          let isAuthorized = false;
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          if(typeof OAuthServerConfig === 'object'){
-            let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-
-            if(accessToken){
-              isAuthorized = true;
-            } else if(accessTokenStr === containerAccessToken){
-              isAuthorized = true;
-            }
-          }
+          let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
