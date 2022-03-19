@@ -1,7 +1,7 @@
 
 import RestHelpers from './RestHelpers';
 
-import { get, has, set, unset, cloneDeep } from 'lodash';
+import { get, has, set, unset, cloneDeep, pullAt } from 'lodash';
 import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
@@ -244,9 +244,37 @@ if(typeof serverRouteManifest === "object"){
       // Read Interaction
       // https://www.hl7.org/fhir/http.html#read
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
-
-        let readUrl = "/" + routeResourceType
         
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
+  
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+
+          let isAuthorized = parseUserAuthorization(req);
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+            console.log('req.query', req.query)
+            console.log('req.params', req.params)
+
+            let record = Collections[collectionName].findOne({
+              'id': req.params.id, 
+              'meta.versionId': get(req, 'params.versionId')
+            });            
+            if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
+            
+            res.setHeader("content-type", 'application/fhir+json');
+            res.setHeader("Last-Modified", moment(get(record, 'meta.lastUpdated')).toDate());
+            
+            // Success
+            JsonRoutes.sendResult(res, {
+              code: 200,
+              data: RestHelpers.prepForFhirTransfer(record)
+            });
+          }
+        });
+
 
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
@@ -274,7 +302,14 @@ if(typeof serverRouteManifest === "object"){
             records.forEach(function(recordVersion){
               payload.push({
                 fullUrl: "Organization/" + get(recordVersion, 'id'),
-                resource: RestHelpers.prepForFhirTransfer(recordVersion)
+                resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                request: {
+                  method: "GET",
+                  url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                },
+                response: {
+                  status: "200"
+                }
               });
               if(get(recordVersion, 'meta.lastUpdated')){
                 hasVersionedLastModified = true;
@@ -294,7 +329,7 @@ if(typeof serverRouteManifest === "object"){
             // Success
             JsonRoutes.sendResult(res, {
               code: 200,
-              data: Bundle.generate(payload)
+              data: Bundle.generate(payload, "history")
             });
           }
         });
@@ -363,44 +398,93 @@ if(typeof serverRouteManifest === "object"){
               }
             } else {
 
-              records = Collections[collectionName].find({id: req.params.id});
+              records = Collections[collectionName].find({id: req.params.id}).fetch();
 
               // plain ol regular approach
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
+              // if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
   
               // could we find it?
-              if(records){
-                // Success
-                res.setHeader("Content-type", 'application/fhir+json');
-  
-                if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + '.versioning') === "versioned"){
-                  let lastModified;
-  
-                  if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
-  
-                  // and generate a Bundle payload
-                  payload = [];
-  
-                  records.forEach(function(recordVersion){
-                    payload.push({
-                      fullUrl: "Organization/" + get(recordVersion, 'id'),
-                      resource: RestHelpers.prepForFhirTransfer(recordVersion)
-                    });
-                    if(get(recordVersion, 'meta.lastUpdated')){
-                      hasVersionedLastModified = true;
-                      if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
-                        lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
+              if(Array.isArray(records)){
+                if(records.length === 0){
+                  // no content
+                  JsonRoutes.sendResult(res, {
+                    code: 204
+                  });
+                } else if (records.length === 1){
+                  res.setHeader("Content-type", 'application/fhir+json');
+                  res.setHeader("Last-Modified", lastModified);
+
+                  JsonRoutes.sendResult(res, {
+                    code: 200,
+                    data: RestHelpers.prepForFhirTransfer(records[0])
+                  });
+                } else if (records.length > 1){
+                  // Success
+                  res.setHeader("Content-type", 'application/fhir+json');
+                    
+                  if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + '.versioning') === "versioned"){
+
+                    if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+
+                    // and generate a Bundle payload
+                    payload = [];
+
+                    records.forEach(function(recordVersion){
+                      console.log('recordVersion', recordVersion)
+
+                      let matchIndex = findIndex(payload, function(o) { return o.id === get(recordVersion, 'id')});
+
+                      if(matchIndex){
+                        if(parseInt(get(recordVersion, 'meta.versionId')) > parseInt(get(records[matchIndex], 'meta.versionId'))){
+                          // remove current 
+                          pullAt(payload, matchIndex);
+
+                          // add the most recent
+                          payload.push({
+                            fullUrl: "Organization/" + get(recordVersion, 'id'),
+                            resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                            request: {
+                              method: "GET",
+                              url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
+                            },
+                            response: {
+                              status: "200"
+                            }
+                          });
+                        } 
+                      } else {
+                        payload.push({
+                          fullUrl: "Organization/" + get(recordVersion, 'id'),
+                          resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                          request: {
+                            method: "GET",
+                            url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
+                          },
+                          response: {
+                            status: "200"
+                          }
+                        });
                       }
-                    } 
-                  });  
-                  
-                  res.setHeader("Last-Modified", lastModified.toDate());
+                      
+                      if(get(recordVersion, 'meta.lastUpdated')){
+                        hasVersionedLastModified = true;
+                        if(moment(get(recordVersion, 'meta.lastUpdated')) > moment(lastModified)){
+                          lastModified = moment(get(recordVersion, 'meta.lastUpdated')).toDate();
+                        }
+                      } 
+                    });  
+                    
+                    if(hasVersionedLastModified){
+                      res.setHeader("Last-Modified", lastModified);
+                    }
+                  }
+
+                  JsonRoutes.sendResult(res, {
+                    code: 200,
+                    data: Bundle.generate(payload)
+                  });
                 }
-  
-                JsonRoutes.sendResult(res, {
-                  code: 200,
-                  data: Bundle.generate(payload)
-                });
+                
               } else {
                 // Not Found
                 JsonRoutes.sendResult(res, {
@@ -424,9 +508,9 @@ if(typeof serverRouteManifest === "object"){
           }
         });
 
-        JsonRoutes.add("get", "/" + fhirPath + readUrl, function (req, res, next) {
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET ' + readUrl, req.query); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET ' + fhirPath + "/", req.query); }
   
 
 
@@ -456,7 +540,17 @@ if(typeof serverRouteManifest === "object"){
 
               // payload entries
               records.forEach(function(record){
-                payload.push(RestHelpers.prepForFhirTransfer(record));
+                payload.push({
+                  fullUrl: "Organization/" + get(recordVersion, 'id'),
+                  resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                  request: {
+                    method: "GET",
+                    url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                  },
+                  response: {
+                    status: "200"
+                  }
+                });
               });
 
               if(get(Meteor, 'settings.private.trace') === true) { console.log('payload', payload); }
@@ -466,7 +560,7 @@ if(typeof serverRouteManifest === "object"){
               if(totalMatches > payload.length){
                 links = [{
                   "relation": "next",
-                  "url": readUrl + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
+                  "url": fhirPath + "/" + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
                 }]  
               }
               
@@ -658,7 +752,8 @@ if(typeof serverRouteManifest === "object"){
                   unset(newRecord, '_id');
 
                   // versioned, means we have prior versions and need to add a new one
-                  if(get(Meteor, 'settings.private.recordVersioningEnabled')){
+                  if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + ".versioning") === "versioned"){
+                  // if(get(Meteor, 'settings.private.recordVersioningEnabled')){
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Versioned Collection: Trying to add another versioned record to the main Task collection.') }
   
                     if(get(Meteor, 'settings.private.debug') === true) { console.log("Lets set a new version ID"); }
@@ -717,7 +812,7 @@ if(typeof serverRouteManifest === "object"){
                     console.log("So we just need to update the record");
 
                     if(get(Meteor, 'settings.private.debug') === true) { console.log('Nonversioned Collection: Trying to update the existing record.') }
-                    newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
+                      newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
                       if (error) {
                         if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
           
@@ -874,7 +969,6 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
-
       // Patch Interaction
       // https://www.hl7.org/fhir/http.html#update
       // https://stackoverflow.com/questions/31683075/how-to-do-a-deep-comparison-between-2-objects-with-lodash  
@@ -1010,31 +1104,6 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-
-          // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-
-          // res.setHeader("Access-Control-Allow-Credentials", "true");
-          // res.setHeader("Access-Control-Max-Age", "1800");
-          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
-
-
-          // let isAuthorized = false;
-          // let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          // if(typeof OAuthServerConfig === 'object'){
-            
-          //   let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-          //   if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-          //   //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); }
-
-          //   if(accessToken){
-          //     isAuthorized = true;
-          //   } else if(accessTokenStr === containerAccessToken){
-          //     isAuthorized = true;
-          //   }
-          // }
           let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
@@ -1088,19 +1157,6 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          // let isAuthorized = false;
-          // let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-          // if(typeof OAuthServerConfig === 'object'){          
-          //   let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
-
-          //   if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
-
-          //   if(accessToken){
-          //     isAuthorized = true;
-          //   } else if(accessTokenStr === containerAccessToken){
-          //     isAuthorized = true;
-          //   }
-          // }
           let isAuthorized = parseUserAuthorization(req);
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
@@ -1123,7 +1179,17 @@ if(typeof serverRouteManifest === "object"){
               let payload = [];
 
               matchingRecords.forEach(function(record){
-                payload.push(RestHelpers.prepForFhirTransfer(record));
+                payload.push({
+                  fullUrl: routeResourceType + "/" + get(record, 'id'),
+                  resource: RestHelpers.prepForFhirTransfer(record),
+                  request: {
+                    method: "POST",
+                    url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
+                  },
+                  response: {
+                    status: "200"
+                  }
+                });
               });
 
               console.log('payload', payload);
@@ -1149,7 +1215,17 @@ if(typeof serverRouteManifest === "object"){
   
                 matchingRecords.forEach(function(record){
                   // console.log('record', get(record, 'name'))
-                  payload.push(RestHelpers.prepForFhirTransfer(record));
+                  payload.push({
+                    fullUrl: routeResourceType + "/" + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record),
+                    request: {
+                      method: "POST",
+                      url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
+                    },
+                    response: {
+                      status: "200"
+                    }
+                  });
                 });
   
                 console.log('payload', payload);
@@ -1229,7 +1305,10 @@ if(typeof serverRouteManifest === "object"){
               let payload = [];
 
               resourceRecords.forEach(function(record){
-                payload.push(RestHelpers.prepForFhirTransfer(record));
+                payload.push({
+                  fullUrl: routeResourceType + "/" + get(record, 'id'),
+                  resource: RestHelpers.prepForFhirTransfer(record)
+                });
               });
             }
 

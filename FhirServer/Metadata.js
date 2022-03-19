@@ -63,7 +63,7 @@ const Server = {
     // }
 
 
-    if(get(Meteor, 'settings.private.fhir.disableOauth') !== true){
+    if(get(Meteor, 'settings.private.fhir.disableSmartOnFhir') !== true){
       CapabilityStatement.rest[0].security = {
         "service": [],
         "extension": []
@@ -76,9 +76,15 @@ const Server = {
           }
         ],
         "text": "OAuth2 using SMART-on-FHIR profile (see http://docs.smarthealthit.org)"
+      }, {
+        "coding" : [
+          {
+            "system" : "http://fhir.udap.org/CodeSystem/capability-rest-security-service",
+            "code" : "UDAP"
+          }
+        ],
+        "text" : "OAuth 2 using UDAP profile (see http://www.udap.org)"
       })
-
-      
 
       CapabilityStatement.rest[0].security.extension.push({
         "extension": [
@@ -176,18 +182,20 @@ const Server = {
   },
   getWellKnownUdapConfiguration: function(){
     let response = {
-      "resourceType": "Basic",
+      "resourceType": "UdapMetadata",
       "x5c": [],      
       "udap_versions_supported": ["1"],
       "udap_certifications_supported": ["https://vhdir.meteorapp.com/udap/profiles/example-certification"],
       "udap_certifications_required": ["https://vhdir.meteorapp.com/udap/profiles/example-certification"],
       "grant_types_supported": ["authorization_code", "refresh_token",  "client_credentials"],
       "scopes_supported": ["openid", "launch/patient"],
-      "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize"),
+      "authz_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorization_endpoint', "oauth/authorize"),
+      "authorization": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorization_endpoint', "oauth/authorize"),
+      "authz": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorization_endpoint', "oauth/authorize"),
+      "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorization_endpoint', "oauth/authorize"),
       "token_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token"),
       "token_endpoint_auth_methods_supported": ["private_key_jwt"],
       "token_endpoint_auth_signing_alg_values_supported": ["RS256", "ES384"],
-
       "registration_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.registrationEndpoint', "oauth/registration"),
       "registration_endpoint_jwt_signing_alg_values_supported": ["RS256", "ES384"],
       "signed_metadata": null,
@@ -197,10 +205,14 @@ const Server = {
         "exp": moment().unix(),
         "iat": moment().unix(),
         "jti": "random-value-" + Random.id(),
-        "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize"),
+        "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorization_endpoint', "oauth/authorize"),
         "token_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token"),
         "registration_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.registrationEndpoint', "oauth/registration")
-      }
+      },
+      "udap_profiles_supported": ["udap_authz", "udap_dcr"],
+      "udap_authorization_extensions_supported": [],
+      "udap_authorization_extensions_required": [],
+      "signed_endpoints": []      
     }
 
     let fhirRestEndpoints = get(Meteor, 'settings.private.fhir.rest');
