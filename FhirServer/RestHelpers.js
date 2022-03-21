@@ -331,18 +331,44 @@ export const RestHelpers = {
       process.env.DEBUG && console.log("RestHelpers.generateMongoSearchQuery.urlQueryString", query, resourceType);
     
       var databaseQuery = {};
+
+      if (get(query, 'identifier')) {
+        databaseQuery = {$or: []};
+        databaseQuery.$or.push({
+          'identifier.value': get(query, 'identifier')
+        })
+        databaseQuery.$or.push({
+          'id': get(query, 'identifier')
+        })
+        databaseQuery.$or.push({
+          'identifier': {
+            $elemMatch: {
+              'value': get(query, 'identifier')
+            }
+          }
+        })
+      }
     
       if (get(query, '_id')) {
         // databaseQuery['_id'] = get(query, '_id')
 
         // this is an idiosyncracy, but is correct to the FHIR spec
         // confirm: Y/n
-        databaseQuery['id'] = get(query, '_id')
+
+        if(Array.isArray(databaseQuery.$or)){
+          databaseQuery.$or.push({id: get(query, '_id')})
+        } else {
+          databaseQuery['id'] = get(query, '_id')
+        }
       }
 
       // this seems hot and wild, but useful; monitor accordingly
       if (get(query, 'extension')) {
-        databaseQuery['extension.url'] = get(query, 'extension')
+        // if(Array.isArray(databaseQuery.$or)){
+        //   databaseQuery.$or.push({'extension.url': get(query, 'extension')})
+        // } else {
+          databaseQuery['extension.url'] = get(query, 'extension')
+        // }
       }
 
       // $near support
@@ -363,7 +389,7 @@ export const RestHelpers = {
           metersMaxDistance = Number(nearParamsArray[2]) * 1.60934 * 1000;
         }        
 
-        databaseQuery['_location'] = { $near: {
+        let locationQuery = { $near: {
           $geometry: {
             type: 'Point',
             coordinates: [Number(nearParamsArray[1]), Number(nearParamsArray[0])]
@@ -371,6 +397,12 @@ export const RestHelpers = {
           // Convert [mi] to [km] to [m]
           $maxDistance: metersMaxDistance
         }}
+
+        // if(Array.isArray(databaseQuery.$or)){
+        //   databaseQuery.$or.push({'_location': locationQuery})
+        // } else {
+        databaseQuery['_location'] = locationQuery
+        // }
       }
 
       // underscores are important here! 
@@ -439,13 +471,7 @@ export const RestHelpers = {
         };
       }
 
-      if (get(query, 'identifier')) {
-        databaseQuery['identifier'] = {
-          $elemMatch: {
-            'value': get(query, 'identifier')
-          }
-        };
-      }
+      
 
       if (get(query, 'address')) {
         databaseQuery['address.city'] = {

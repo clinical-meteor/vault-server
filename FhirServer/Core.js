@@ -241,12 +241,17 @@ if(typeof serverRouteManifest === "object"){
 
     if(Array.isArray(serverRouteManifest[routeResourceType].interactions)){
       
+      
+
       // Read Interaction
       // https://www.hl7.org/fhir/http.html#read
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
+
         
+        
+        // vread interaction
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('> GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
   
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -275,7 +280,7 @@ if(typeof serverRouteManifest === "object"){
           }
         });
 
-
+        // history
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
   
@@ -510,7 +515,7 @@ if(typeof serverRouteManifest === "object"){
 
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET ' + fhirPath + "/", req.query); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('>> GET ' + fhirPath + "/" + routeResourceType, req.query); }
   
 
 
@@ -526,6 +531,8 @@ if(typeof serverRouteManifest === "object"){
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
             let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Generated the following query for the ' + routeResourceType + ' collection.', databaseQuery); }
+
             let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName]', collectionName); }
@@ -534,6 +541,7 @@ if(typeof serverRouteManifest === "object"){
             let payload = [];
 
             if(Collections[collectionName]){
+
               let totalMatches = Collections[collectionName].find(databaseQuery).count();
               let records = Collections[collectionName].find(databaseQuery, databaseOptions).fetch();
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
@@ -541,8 +549,8 @@ if(typeof serverRouteManifest === "object"){
               // payload entries
               records.forEach(function(record){
                 payload.push({
-                  fullUrl: "Organization/" + get(recordVersion, 'id'),
-                  resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                  fullUrl: "Organization/" + get(record, 'id'),
+                  resource: RestHelpers.prepForFhirTransfer(record),
                   request: {
                     method: "GET",
                     url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
@@ -788,7 +796,22 @@ if(typeof serverRouteManifest === "object"){
                         // success!
                         JsonRoutes.sendResult(res, {
                           code: 200,
-                          data: RestHelpers.prepForFhirTransfer(createdRecord)
+                          data: {
+                            "resourceType": "OperationOutcome",
+                            "issue" : [{ // R!  A single issue associated with the action
+                              "severity" : "information", // R!  fatal | error | warning | information
+                              "code" : resultId, // R!  Error or warning code
+                              "details" : { 
+                                "text": "existing resource updated",
+                                "coding": [{
+                                  "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
+                                  "code": "MSG_UPDATED",
+                                  "display": "existing resource updated",
+                                  "userSelected": false
+                                }]
+                               }
+                            }]
+                          }
                         });
 
                         // let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
@@ -1279,9 +1302,10 @@ if(typeof serverRouteManifest === "object"){
           // }
         });
 
+        // search Interaction
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + ":param", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------------------------'); }
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '?' + JSON.stringify(req.query)); }
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('??? GET /' + fhirPath + '/' + routeResourceType + '?' + JSON.stringify(req.query)); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('params', req.params); }
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -1331,6 +1355,8 @@ if(typeof serverRouteManifest === "object"){
           // }
         });
       }
+
+      
     }
   });
 

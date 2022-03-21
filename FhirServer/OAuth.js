@@ -1015,12 +1015,44 @@ Meteor.startup(function() {
 
           
     } else {
-      JsonRoutes.sendResult(res, {
-        code: 409,
-        data: {
-          "error": "wasnt_able_to_decode"
+      console.log("wasn't able to decode JWT...");
+      console.log("checking for unsigned data...");
+
+      if(req.body){
+
+        let newClientRecord = {
+          "verified": false,
+          "created_at": new Date()
         }
-      }); 
+
+
+        process.env.TRACE && console.log('newClientRecord', newClientRecord)
+
+        // store the incoming statement as a field in a new client record
+        let oauthClientRecord = Object.assign(newClientRecord, req.body);
+
+        process.env.DEBUG && console.log("------------------------------------------------------------")
+        process.env.DEBUG && console.log('')
+        console.log('Generated oauth client record...')
+        process.env.DEBUG && console.log(oauthClientRecord)
+  
+        let clientId = OAuthClients.insert(oauthClientRecord);
+
+
+        JsonRoutes.sendResult(res, {
+          code: 201,
+          data: clientId
+        });   
+
+      } else {
+        JsonRoutes.sendResult(res, {
+          code: 204,
+          data: {
+            "error": "wasnt_able_to_decode_jwt"
+          }
+        });   
+      }
+
     } 
   });
   JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
@@ -1029,6 +1061,27 @@ Meteor.startup(function() {
 
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
+
+    let returnPayload = {
+      code: 200,
+      data: {
+        "message": 'token'
+      }
+    }
+    if(process.env.TRACE){
+      console.log('return payload', returnPayload);
+    }
+   
+    JsonRoutes.sendResult(res, returnPayload);
+  });
+  JsonRoutes.add("post", "/oauth/token", function (req, res, next) {
+    console.log('========================================================================');
+    console.log('POST ' + '/oauth/token');
+
+    res.setHeader('Content-type', 'application/json');
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    console.log('req.body', req.body);
 
     let returnPayload = {
       code: 200,
