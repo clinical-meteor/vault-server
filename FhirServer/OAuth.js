@@ -1062,7 +1062,9 @@ Meteor.startup(function() {
     let returnPayload = {
       code: 200,
       data: {
-        "message": 'token'
+        "access_token": Random.id(),
+        "token_type": "Bearer"
+        // "expires_in": ""
       }
     }
     if(process.env.TRACE){
@@ -1117,10 +1119,7 @@ Meteor.startup(function() {
     }
 
     let returnPayload = {
-      code: 200,
-      data: {
-        "message": 'authenticate'
-      }
+      code: 200
     }
 
     if(get(req, 'body.redirect_uri')){
