@@ -1,7 +1,7 @@
 
 import RestHelpers from './RestHelpers';
 
-import { get, has, set, unset, cloneDeep, pullAt } from 'lodash';
+import { get, has, set, unset, cloneDeep, pullAt, findIndex } from 'lodash';
 import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';

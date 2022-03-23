@@ -1080,12 +1080,29 @@ Meteor.startup(function() {
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    console.log('req.body', req.body);
+    console.log("")
+    console.log("req.query");
+    console.log(req.query);
+    console.log("")
+    console.log("req.body")
+    console.log(req.body);
+
+    // need to do a lookup to find scopes?
+
+    // should probably store the access token
+    let newAccessToken = Random.id();
 
     let returnPayload = {
       code: 200,
       data: {
-        "message": 'token'
+        // The access token issued by the authorization server
+        "access_token": newAccessToken,
+
+        // Fixed value
+        "token_type": "Bearer",
+
+        // Scope of access authorized. Note that this can be different from the scopes requested by the app.
+        "scope": ""
       }
     }
     if(process.env.TRACE){
@@ -1102,11 +1119,21 @@ Meteor.startup(function() {
     res.setHeader("Access-Control-Allow-Origin", "*");
 
     console.log("")
+    console.log("Query")
     console.log(req.query)
     console.log("")
+    console.log("Body")
     console.log(req.body)
     console.log("")
-    console.log('Redirect: ' + get(req, 'body.redirect_uri'))
+
+    let redirectUri = "";
+    if(get(req, 'query.redirect_uri')){
+      redirectUri = get(req, 'query.redirect_uri');
+    } else if(get(req, 'body.redirect_uri')){
+      redirectUri = get(req, 'body.redirect_uri');
+    }
+
+    console.log('Redirect: ' + redirectUri)
     console.log("")
 
     if(get(req, 'query.client_id')){
@@ -1122,9 +1149,9 @@ Meteor.startup(function() {
       code: 200
     }
 
-    if(get(req, 'body.redirect_uri')){
+    if(redirectUri){
       returnPayload.code = 301;
-      res.setHeader("Location", get(req, 'body.redirect_uri'));
+      res.setHeader("Location", redirectUri);
 
       console.log('returnPayload', returnPayload)
       JsonRoutes.sendResult(res, returnPayload);
