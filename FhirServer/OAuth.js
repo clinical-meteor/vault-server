@@ -679,7 +679,9 @@ Meteor.startup(function() {
                   }
                   if(!get(verifiedJwt, 'response_types')){
                     console.log('verified JWT did not have a response_types')
-                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
+                    if(!process.env.RELAX_UDAP_REGISTRATION){
+                      Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
+                    }
                     // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
                     // responseSent = true;
                   }
