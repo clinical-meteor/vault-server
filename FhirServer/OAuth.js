@@ -1041,7 +1041,10 @@ Meteor.startup(function() {
 
         JsonRoutes.sendResult(res, {
           code: 201,
-          data: clientId
+          data: {
+            client_id: clientId,
+            client_name: get(req.body, 'client_name')
+          }
         });   
 
       } else {
