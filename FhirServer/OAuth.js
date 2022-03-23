@@ -1040,12 +1040,12 @@ Meteor.startup(function() {
   
         let clientId = OAuthClients.insert(oauthClientRecord);
 
-
         JsonRoutes.sendResult(res, {
           code: 201,
           data: {
             client_id: clientId,
-            client_name: get(req.body, 'client_name')
+            client_name: get(req.body, 'client_name'),
+            scope: get(req.body, 'scope')
           }
         });   
 

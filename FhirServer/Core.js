@@ -243,13 +243,13 @@ if(typeof serverRouteManifest === "object"){
       
       
 
-      // Read Interaction
+      // read
       // https://www.hl7.org/fhir/http.html#read
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
 
         
         
-        // vread interaction
+        // vread 
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('> GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
   
@@ -280,7 +280,7 @@ if(typeof serverRouteManifest === "object"){
           }
         });
 
-        // history
+        // history-instance
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
   
@@ -339,6 +339,7 @@ if(typeof serverRouteManifest === "object"){
           }
         });
 
+        // read
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
   
@@ -513,12 +514,12 @@ if(typeof serverRouteManifest === "object"){
           }
         });
 
+        // search-type
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('>> GET ' + fhirPath + "/" + routeResourceType, req.query); }
-  
 
-
+          console.log('req.originalUrl', req.originalUrl)
 
           // res.setHeader("Access-Control-Allow-Origin", "*");          
           // res.setHeader("Access-Control-Allow-Origin", "*");
@@ -546,30 +547,53 @@ if(typeof serverRouteManifest === "object"){
               let records = Collections[collectionName].find(databaseQuery, databaseOptions).fetch();
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
 
+
               // payload entries
               records.forEach(function(record){
-                payload.push({
+                let newEntry = {
                   fullUrl: "Organization/" + get(record, 'id'),
                   resource: RestHelpers.prepForFhirTransfer(record),
-                  request: {
-                    method: "GET",
-                    url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
-                  },
-                  response: {
-                    status: "200"
+                  search: {
+                    mode: "match"
                   }
-                });
+
+                  // Touchstone
+                  // ERROR: bdl-3: 'entry.request mandatory for batch/transaction/history, otherwise prohibited' failed. Location: Bundle (line 1, col 2).
+
+                  // request: {
+                  //   method: "GET",
+                  //   url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                  // },
+                  // response: {
+                  //   status: "200"
+                  // }
+                }
+                // if(){
+                //   newEntry.request = {
+                //     method: "GET",
+                //     url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                //   };
+                //   newEntry.response = {
+                //     status: "200"
+                //   };
+                // }
+                payload.push(newEntry);
               });
 
               if(get(Meteor, 'settings.private.trace') === true) { console.log('payload', payload); }
 
               // pagination logic
-              let links;
+              let links = [];
+              links.push({
+                "relation": "self",
+                "url": req.originalUrl
+              });  
+
               if(totalMatches > payload.length){
-                links = [{
+                links.push({
                   "relation": "next",
                   "url": fhirPath + "/" + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
-                }]  
+                });  
               }
               
               // Success
@@ -592,7 +616,7 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
-      // Create Interaction
+      // update-create 
       // https://www.hl7.org/fhir/http.html#create
       if(serverRouteManifest[routeResourceType].interactions.includes('create')){
         JsonRoutes.add("post", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
@@ -714,7 +738,7 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
-      // Update Interaction
+      // update 
       // https://www.hl7.org/fhir/http.html#update
       if(serverRouteManifest[routeResourceType].interactions.includes('update')){
         JsonRoutes.add("put", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
@@ -800,9 +824,9 @@ if(typeof serverRouteManifest === "object"){
                             "resourceType": "OperationOutcome",
                             "issue" : [{ // R!  A single issue associated with the action
                               "severity" : "information", // R!  fatal | error | warning | information
-                              "code" : resultId, // R!  Error or warning code
+                              "code" : "	informational", // R!  Error or warning code
                               "details" : { 
-                                "text": "existing resource updated",
+                                "text": resultId,
                                 "coding": [{
                                   "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
                                   "code": "MSG_UPDATED",
