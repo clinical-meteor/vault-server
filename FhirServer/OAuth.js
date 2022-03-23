@@ -662,34 +662,26 @@ Meteor.startup(function() {
                   if(!get(verifiedJwt, 'client_name')){
                     console.log('verified JWT did not have a client_name')
                     Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a client_name"}});
-                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-                    // responseSent = true;
                   }
                   if(!get(verifiedJwt, 'redirect_uris')){
                     console.log('verified JWT did not have a redirect_uris')
-                    Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a redirect_uris"}});
-                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-                    // responseSent = true;
+                    if(!process.env.RELAX_UDAP_REGISTRATION){
+                      Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a redirect_uris"}});
+                    }
                   }
                   if(!get(verifiedJwt, 'grant_types')){
                     console.log('verified JWT did not have a grant_types')
                     Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a grant_types"}});
-                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-                    // responseSent = true;
                   }
                   if(!get(verifiedJwt, 'response_types')){
                     console.log('verified JWT did not have a response_types')
                     if(!process.env.RELAX_UDAP_REGISTRATION){
                       Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
                     }
-                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-                    // responseSent = true;
                   }
                   if(!get(verifiedJwt, 'token_endpoint_auth_method')){
                     console.log('verified JWT did not have a token_endpoint_auth_method')
                     Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a token_endpoint_auth_method", "udap_testscript_step":"IIA3a3"}});
-                    // JsonRoutes.sendResult(res, { code: 400, data: {"error": "invalid_client_metadata"}}); 
-                    // responseSent = true;
                   }
                   
                   
