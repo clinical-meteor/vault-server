@@ -824,7 +824,7 @@ if(typeof serverRouteManifest === "object"){
                             "resourceType": "OperationOutcome",
                             "issue" : [{ // R!  A single issue associated with the action
                               "severity" : "information", // R!  fatal | error | warning | information
-                              "code" : "	informational", // R!  Error or warning code
+                              "code" : "informational", // R!  Error or warning code
                               "details" : { 
                                 "text": resultId,
                                 "coding": [{
