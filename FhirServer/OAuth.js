@@ -1101,7 +1101,10 @@ Meteor.startup(function() {
 
     console.log("")
     console.log(req.query)
-    console.log('Redirect: ' + get(req, 'query.redirect_uri'))
+    console.log("")
+    console.log(req.body)
+    console.log("")
+    console.log('Redirect: ' + get(req, 'body.redirect_uri'))
     console.log("")
 
     if(get(req, 'query.client_id')){
@@ -1120,9 +1123,9 @@ Meteor.startup(function() {
       }
     }
 
-    if(get(req, 'query.redirect_uri')){
+    if(get(req, 'body.redirect_uri')){
       returnPayload.code = 301;
-      res.setHeader("Location", get(req, 'query.redirect_uri'));
+      res.setHeader("Location", get(req, 'body.redirect_uri'));
 
       console.log('returnPayload', returnPayload)
       JsonRoutes.sendResult(res, returnPayload);
