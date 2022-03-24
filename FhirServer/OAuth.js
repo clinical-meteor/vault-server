@@ -1169,11 +1169,10 @@ Meteor.startup(function() {
         }});        
 
         if(redirectUri){
-          returnPayload.code = 301;
           res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state') + "&code=" + newAuthorizationCode);
 
           JsonRoutes.sendResult(res, {
-            code: 200,
+            code: 301,
             data: {
               code: newAuthorizationCode,
               state: get(req.body, 'state', '')
