@@ -241,15 +241,10 @@ if(typeof serverRouteManifest === "object"){
 
     if(Array.isArray(serverRouteManifest[routeResourceType].interactions)){
       
-      
-
-      // read
-      // https://www.hl7.org/fhir/http.html#read
-      if(serverRouteManifest[routeResourceType].interactions.includes('read')){
-
+      // vread 
+      // https://www.hl7.org/fhir/http.html#vread
+      if(serverRouteManifest[routeResourceType].interactions.includes('vread')){
         
-        
-        // vread 
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('> GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
   
@@ -279,65 +274,11 @@ if(typeof serverRouteManifest === "object"){
             });
           }
         });
+      }
 
-        // history-instance
-        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
-  
-          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
-          res.setHeader("ETag", fhirVersion);
-
-          let isAuthorized = parseUserAuthorization(req);
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
-
-            let record;
-            let lastModified = moment().subtract(100, 'years');
-            let hasVersionedLastModified = false;
-
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
-
-            let records = Collections[collectionName].find({id: req.params.id});
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
-
-            // and generate a Bundle payload
-            payload = [];
-
-            records.forEach(function(recordVersion){
-              payload.push({
-                fullUrl: "Organization/" + get(recordVersion, 'id'),
-                resource: RestHelpers.prepForFhirTransfer(recordVersion),
-                request: {
-                  method: "GET",
-                  url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
-                },
-                response: {
-                  status: "200"
-                }
-              });
-              if(get(recordVersion, 'meta.lastUpdated')){
-                hasVersionedLastModified = true;
-                if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
-                  lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
-                }
-              } 
-            });  
-
-            res.setHeader("content-type", 'application/fhir+json');
-            if(hasVersionedLastModified){
-              res.setHeader("Last-Modified", lastModified.toDate());
-            }
-            
-            // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-
-            // Success
-            JsonRoutes.sendResult(res, {
-              code: 200,
-              data: Bundle.generate(payload, "history")
-            });
-          }
-        });
+      // read
+      // https://www.hl7.org/fhir/http.html#read
+      if(serverRouteManifest[routeResourceType].interactions.includes('read')){
 
         // read
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
@@ -345,16 +286,7 @@ if(typeof serverRouteManifest === "object"){
   
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
-          // res.setHeader("Access-Control-Allow-Origin", "*");
-          // res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With');
-          // res.setHeader("content-type", "application/fhir+json, application/json");
-  
-          // res.setHeader('Access-Control-Allow-Origin', Meteor.absoluteUrl());
-  
-          // res.setHeader("Access-Control-Allow-Credentials", "true");
-          // res.setHeader("Access-Control-Max-Age", "1800");
-          // res.setHeader("Access-Control-Allow-Methods","PUT, POST, GET, DELETE, PATCH, OPTIONS");
-  
+
           let isAuthorized = parseUserAuthorization(req);
   
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
@@ -407,7 +339,7 @@ if(typeof serverRouteManifest === "object"){
               records = Collections[collectionName].find({id: req.params.id}).fetch();
 
               // plain ol regular approach
-              // if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+              if(get(Meteor, 'settings.private.debug') === true) { console.log('records', records); }
   
               // could we find it?
               if(Array.isArray(records)){
@@ -513,6 +445,68 @@ if(typeof serverRouteManifest === "object"){
             });
           }
         });
+        
+        
+
+        // history-instance
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
+  
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+
+          let isAuthorized = parseUserAuthorization(req);
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+            let record;
+            let lastModified = moment().subtract(100, 'years');
+            let hasVersionedLastModified = false;
+
+            console.log('req.query', req.query)
+            console.log('req.params', req.params)
+
+            let records = Collections[collectionName].find({id: req.params.id});
+            if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+
+            // and generate a Bundle payload
+            payload = [];
+
+            records.forEach(function(recordVersion){
+              payload.push({
+                fullUrl: "Organization/" + get(recordVersion, 'id'),
+                resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                request: {
+                  method: "GET",
+                  url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                },
+                response: {
+                  status: "200"
+                }
+              });
+              if(get(recordVersion, 'meta.lastUpdated')){
+                hasVersionedLastModified = true;
+                if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
+                  lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
+                }
+              } 
+            });  
+
+            res.setHeader("content-type", 'application/fhir+json');
+            if(hasVersionedLastModified){
+              res.setHeader("Last-Modified", lastModified.toDate());
+            }
+            
+            // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+
+            // Success
+            JsonRoutes.sendResult(res, {
+              code: 200,
+              data: Bundle.generate(payload, "history")
+            });
+          }
+        });
+
 
         // search-type
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {

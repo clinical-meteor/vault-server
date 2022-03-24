@@ -1126,6 +1126,12 @@ Meteor.startup(function() {
     console.log(req.body)
     console.log("")
 
+    if(get(req.body, 'client_id')){
+      let requestedClient = OAuthClients.findOne({'client_id': get(req.body, 'client_id')});
+      console.log('requestedClient', requestedClient)
+      console.log("")
+    }
+
     let redirectUri = "";
     if(get(req, 'query.redirect_uri')){
       redirectUri = get(req, 'query.redirect_uri');
@@ -1140,25 +1146,40 @@ Meteor.startup(function() {
       let client = OAuthClients.findOne({_id: get(req, 'query.client_id')});
       if(client){
         console.log('client', client)
+
+        let newAuthorizationCode = Random.id();
+
+        OAuthClients.update({'client_id': get(req.body, 'client_id')}, {$set: {
+          "authorization_code":  newAuthorizationCode
+        }});
+
+        let returnPayload = {
+          code: 200,
+          data: {
+            // should probably record this in the database
+            code: newAuthorizationCode,
+            state: get(req.body, 'state', '')
+          }
+        }
+        
+
+        if(redirectUri){
+          returnPayload.code = 301;
+          res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state'));
+
+          console.log('returnPayload', returnPayload)
+          JsonRoutes.sendResult(res, returnPayload);
+        } else {
+          console.log('returnPayload', returnPayload)
+          JsonRoutes.sendResult(res, returnPayload);
+        }  
       } else {
         console.log('No client found matching that client_id');
+        JsonRoutes.sendResult(res, {
+          code: 204
+        });
       }
-    }
-
-    let returnPayload = {
-      code: 200
-    }
-
-    if(redirectUri){
-      returnPayload.code = 301;
-      res.setHeader("Location", redirectUri);
-
-      console.log('returnPayload', returnPayload)
-      JsonRoutes.sendResult(res, returnPayload);
-    } else {
-      console.log('returnPayload', returnPayload)
-      JsonRoutes.sendResult(res, returnPayload);
-    }   
+    } 
   });
 
   JsonRoutes.add("get", "/authorizations/manage", function (req, res, next) {
