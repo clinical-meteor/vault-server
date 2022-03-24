@@ -1179,7 +1179,12 @@ Meteor.startup(function() {
           code: 204
         });
       }
-    } 
+    } else {
+      console.log('No client_id in record.  Malformed request.');
+        JsonRoutes.sendResult(res, {
+          code: 412
+        });
+    }
   });
 
   JsonRoutes.add("get", "/authorizations/manage", function (req, res, next) {
