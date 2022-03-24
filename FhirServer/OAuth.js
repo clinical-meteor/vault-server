@@ -1091,35 +1091,39 @@ Meteor.startup(function() {
 
     let authorizedClient = OAuthClients.findOne({authorization_code: get(req.body, 'code')});
 
-    if(authorizedClient){
+    console.log("");
+    console.log('authorizedClient');
+    console.log(authorizedClient);
+    console.log("");
 
+    if(authorizedClient){
       if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, 'id'))){
         JsonRoutes.sendResult(res, {
           code: 401
         });
-      }
+      } else {
+        // should probably store the access token
+        let newAccessToken = Random.id();
 
-      // should probably store the access token
-      let newAccessToken = Random.id();
+        let returnPayload = {
+          code: 200,
+          data: {
+            // The access token issued by the authorization server
+            "access_token": newAccessToken,
 
-      let returnPayload = {
-        code: 200,
-        data: {
-          // The access token issued by the authorization server
-          "access_token": newAccessToken,
+            // Fixed value
+            "token_type": "Bearer",
 
-          // Fixed value
-          "token_type": "Bearer",
-
-          // Scope of access authorized. Note that this can be different from the scopes requested by the app.
-          "scope": ""
+            // Scope of access authorized. Note that this can be different from the scopes requested by the app.
+            "scope": ""
+          }
         }
-      }
-      if(process.env.TRACE){
-        console.log('return payload', returnPayload);
-      }
+        if(process.env.TRACE){
+          console.log('return payload', returnPayload);
+        }
 
-      JsonRoutes.sendResult(res, returnPayload);
+        JsonRoutes.sendResult(res, returnPayload);
+      }
     } else {
       JsonRoutes.sendResult(res, {
         code: 400
