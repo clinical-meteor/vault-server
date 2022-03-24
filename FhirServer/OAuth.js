@@ -1089,27 +1089,42 @@ Meteor.startup(function() {
 
     // need to do a lookup to find scopes?
 
-    // should probably store the access token
-    let newAccessToken = Random.id();
+    let authorizedClient = OAuthClients.findOne({authorization_code: get(req.body, 'code')});
 
-    let returnPayload = {
-      code: 200,
-      data: {
-        // The access token issued by the authorization server
-        "access_token": newAccessToken,
+    if(authorizedClient){
 
-        // Fixed value
-        "token_type": "Bearer",
-
-        // Scope of access authorized. Note that this can be different from the scopes requested by the app.
-        "scope": ""
+      if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, 'id'))){
+        JsonRoutes.sendResult(res, {
+          code: 401
+        });
       }
+
+      // should probably store the access token
+      let newAccessToken = Random.id();
+
+      let returnPayload = {
+        code: 200,
+        data: {
+          // The access token issued by the authorization server
+          "access_token": newAccessToken,
+
+          // Fixed value
+          "token_type": "Bearer",
+
+          // Scope of access authorized. Note that this can be different from the scopes requested by the app.
+          "scope": ""
+        }
+      }
+      if(process.env.TRACE){
+        console.log('return payload', returnPayload);
+      }
+
+      JsonRoutes.sendResult(res, returnPayload);
+    } else {
+      JsonRoutes.sendResult(res, {
+        code: 400
+      });
     }
-    if(process.env.TRACE){
-      console.log('return payload', returnPayload);
-    }
-   
-    JsonRoutes.sendResult(res, returnPayload);
   });
   JsonRoutes.add("get", "/oauth/authorize", function (req, res, next) {
     console.log('========================================================================');
@@ -1151,32 +1166,29 @@ Meteor.startup(function() {
 
         OAuthClients.update({'client_id': get(req.body, 'client_id')}, {$set: {
           "authorization_code":  newAuthorizationCode
-        }});
-
-        let returnPayload = {
-          code: 200,
-          data: {
-            // should probably record this in the database
-            code: newAuthorizationCode,
-            state: get(req.body, 'state', '')
-          }
-        }
-        
+        }});        
 
         if(redirectUri){
           returnPayload.code = 301;
-          res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state'));
+          res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state') + "&code=" + newAuthorizationCode);
 
-          console.log('returnPayload', returnPayload)
-          JsonRoutes.sendResult(res, returnPayload);
+          JsonRoutes.sendResult(res, {
+            code: 200,
+            data: {
+              code: newAuthorizationCode,
+              state: get(req.body, 'state', '')
+            }
+          });
         } else {
-          console.log('returnPayload', returnPayload)
-          JsonRoutes.sendResult(res, returnPayload);
+          console.log('No redirect URI found...')
+          JsonRoutes.sendResult(res, {
+            code: 400
+          });
         }  
       } else {
         console.log('No client found matching that client_id');
         JsonRoutes.sendResult(res, {
-          code: 204
+          code: 401
         });
       }
     } else {
