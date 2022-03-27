@@ -122,7 +122,7 @@ const Server = {
         let newResourceStatement = {
           "type": key,
           "interaction": defaultInteractions,
-          "versioning": "no-version"
+          // "versioning": "no-version"
           // "readHistory": false,
           // "updateCreate": false,
           // "conditionalCreate": false,

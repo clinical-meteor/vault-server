@@ -1166,6 +1166,13 @@ Meteor.startup(function() {
       appState = get(req, 'body.state');
     }
 
+    let responseType = "";
+    if(get(req, 'query.response_type')){
+      responseType = get(req, 'query.response_type');
+    } else if(get(req, 'body.response_type')){
+      responseType = get(req, 'body.response_type');
+    }
+
     console.log("")
     console.log('Redirect:  ' + redirectUri)
     console.log('Client ID: ' + clientId)
@@ -1184,15 +1191,17 @@ Meteor.startup(function() {
         }});        
 
         if(redirectUri){
-          if(!get(req, 'body.state')){
+          if(!appState){
             res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
-          } else if(!get(req, 'body.response_type')){
-            res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request");
-          } else if(get(req, 'body.response_type') !== "code"){
-            res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request");
           } else {
-            res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state') + "&code=" + newAuthorizationCode);
-          }
+            if(!responseType){
+              res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
+            } else if(responseType !== "code"){
+              res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
+            } else {
+              res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
+            }  
+          }          
 
           JsonRoutes.sendResult(res, {
             code: 301,
