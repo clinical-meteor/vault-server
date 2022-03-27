@@ -1115,7 +1115,11 @@ Meteor.startup(function() {
             "token_type": "Bearer",
 
             // Scope of access authorized. Note that this can be different from the scopes requested by the app.
-            "scope": ""
+            "scope": "",
+
+            // The lifetime in seconds of the access token. 
+            // For example, the value 3600 denotes that the access token will expire in one hour from the time the response was generated.
+            "expires_in": get(Meteor, 'settings.private.fhir.tokenTimeout', 86400) 
           }
         }
         if(process.env.TRACE){
