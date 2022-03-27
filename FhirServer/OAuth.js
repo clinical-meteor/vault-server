@@ -1115,7 +1115,7 @@ Meteor.startup(function() {
             "token_type": "Bearer",
 
             // Scope of access authorized. Note that this can be different from the scopes requested by the app.
-            "scope": "",
+            "scope": "openid fhirUser launch offline_access user/*.cruds",
 
             // The lifetime in seconds of the access token. 
             // For example, the value 3600 denotes that the access token will expire in one hour from the time the response was generated.
@@ -1195,25 +1195,37 @@ Meteor.startup(function() {
         }});        
 
         if(redirectUri){
-          if(!appState){
-            res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
-          } else {
-            if(!responseType){
-              res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
-            } else if(responseType !== "code"){
-              res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
-            } else {
-              res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
-            }  
-          }          
+          if(Array.isArray(client.redirect_uris)){
+            if(client.redirect_uris.includes(redirectUri)){
+              if(!appState){
+                res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
+              } else {            
+                if(!responseType){
+                  res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
+                } else if(responseType !== "code"){
+                  res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
+                } else {
+                  res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
+                }  
 
-          JsonRoutes.sendResult(res, {
-            code: 301,
-            data: {
-              code: newAuthorizationCode,
-              state: appState
-            }
-          });
+                JsonRoutes.sendResult(res, {
+                  code: 301,
+                  data: {
+                    code: newAuthorizationCode,
+                    state: appState
+                  }
+                });      
+              } 
+            } else {
+              JsonRoutes.sendResult(res, {
+                code: 412
+              });
+            }              
+          } else {
+            JsonRoutes.sendResult(res, {
+              code: 412
+            });
+          }
         } else {
           console.log('No redirect URI found...')
           JsonRoutes.sendResult(res, {
@@ -1228,9 +1240,9 @@ Meteor.startup(function() {
       }
     } else {
       console.log('No client_id in request.  Malformed request.');
-        JsonRoutes.sendResult(res, {
-          code: 412
-        });
+      JsonRoutes.sendResult(res, {
+        code: 412
+      });
     }
   });
 
