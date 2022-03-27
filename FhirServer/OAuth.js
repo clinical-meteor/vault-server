@@ -1052,27 +1052,27 @@ Meteor.startup(function() {
 
     } 
   });
-  JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
-    console.log('========================================================================');
-    console.log('GET ' + '/oauth/token');
+  // JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
+  //   console.log('========================================================================');
+  //   console.log('GET ' + '/oauth/token');
 
-    res.setHeader('Content-type', 'application/json');
-    res.setHeader("Access-Control-Allow-Origin", "*");
+  //   res.setHeader('Content-type', 'application/json');
+  //   res.setHeader("Access-Control-Allow-Origin", "*");
 
-    let returnPayload = {
-      code: 200,
-      data: {
-        "access_token": Random.id(),
-        "token_type": "Bearer"
-        // "expires_in": ""
-      }
-    }
-    if(process.env.TRACE){
-      console.log('return payload', returnPayload);
-    }
+  //   let returnPayload = {
+  //     code: 200,
+  //     data: {
+  //       "access_token": Random.id(),
+  //       "token_type": "Bearer"
+  //       // "expires_in": ""
+  //     }
+  //   }
+  //   if(process.env.TRACE){
+  //     console.log('return payload', returnPayload);
+  //   }
    
-    JsonRoutes.sendResult(res, returnPayload);
-  });
+  //   JsonRoutes.sendResult(res, returnPayload);
+  // });
   JsonRoutes.add("post", "/oauth/token", function (req, res, next) {
     console.log('========================================================================');
     console.log('POST ' + '/oauth/token');
@@ -1080,24 +1080,24 @@ Meteor.startup(function() {
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
 
-    console.log("")
-    console.log("req.query");
-    console.log(req.query);
-    console.log("")
-    console.log("req.body")
-    console.log(req.body);
+    process.env.DEBUG && console.log("")
+    process.env.DEBUG && console.log("req.query");
+    process.env.DEBUG && console.log(req.query);
+    process.env.DEBUG && console.log("")
+    process.env.DEBUG && console.log("req.body")
+    process.env.DEBUG && console.log(req.body);
 
     // need to do a lookup to find scopes?
 
     let authorizedClient = OAuthClients.findOne({authorization_code: get(req.body, 'code')});
 
-    console.log("");
-    console.log('authorizedClient');
-    console.log(authorizedClient);
-    console.log("");
+    process.env.DEBUG && console.log("");
+    process.env.DEBUG && console.log('authorizedClient');
+    process.env.DEBUG && console.log(authorizedClient);
+    process.env.DEBUG && console.log("");
 
     if(authorizedClient){
-      if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, 'id'))){
+      if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, '_id'))){
         JsonRoutes.sendResult(res, {
           code: 401
         });
@@ -1145,12 +1145,6 @@ Meteor.startup(function() {
     console.log(req.body)
     console.log("")
 
-    if(get(req.body, 'client_id')){
-      let requestedClient = OAuthClients.findOne({'client_id': get(req.body, 'client_id')});
-      console.log('requestedClient', requestedClient)
-      console.log("")
-    }
-
     let redirectUri = "";
     if(get(req, 'query.redirect_uri')){
       redirectUri = get(req, 'query.redirect_uri');
@@ -1161,19 +1155,33 @@ Meteor.startup(function() {
     console.log('Redirect: ' + redirectUri)
     console.log("")
 
-    if(get(req, 'query.client_id')){
-      let client = OAuthClients.findOne({_id: get(req, 'query.client_id')});
+    if(get(req, 'body.client_id')){
+      let client = OAuthClients.findOne({_id: get(req, 'body.client_id')});
       if(client){
         console.log('client', client)
 
+        // if(get(client, 'redirect_uri') !=== redirectUri){
+          // JsonRoutes.sendResult(res, {
+          //   code: 400
+          // });
+        // }
+
         let newAuthorizationCode = Random.id();
 
-        OAuthClients.update({'client_id': get(req.body, 'client_id')}, {$set: {
+        OAuthClients.update({_id: get(req.body, 'client_id')}, {$set: {
           "authorization_code":  newAuthorizationCode
         }});        
 
         if(redirectUri){
-          res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state') + "&code=" + newAuthorizationCode);
+          if(!get(req, 'body.state')){
+            res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
+          } else if(!get(req, 'body.response_type')){
+            res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request");
+          } else if(get(req, 'body.response_type') !== "code"){
+            res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request");
+          } else {
+            res.setHeader("Location", redirectUri + "?state=" + get(req, 'query.state') + "&code=" + newAuthorizationCode);
+          }
 
           JsonRoutes.sendResult(res, {
             code: 301,
@@ -1189,13 +1197,13 @@ Meteor.startup(function() {
           });
         }  
       } else {
-        console.log('No client found matching that client_id');
+        console.log('No client record found matching that client_id');
         JsonRoutes.sendResult(res, {
           code: 401
         });
       }
     } else {
-      console.log('No client_id in record.  Malformed request.');
+      console.log('No client_id in request.  Malformed request.');
         JsonRoutes.sendResult(res, {
           code: 412
         });

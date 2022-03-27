@@ -255,11 +255,11 @@ if(typeof serverRouteManifest === "object"){
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
 
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
+            process.env.DEBUG && console.log('req.query', req.query)
+            process.env.DEBUG && console.log('req.params', req.params)
 
             let record = Collections[collectionName].findOne({
-              'id': req.params.id, 
+              'id': get(req, 'params.id'), 
               'meta.versionId': get(req, 'params.versionId')
             });            
             if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
@@ -267,11 +267,18 @@ if(typeof serverRouteManifest === "object"){
             res.setHeader("content-type", 'application/fhir+json');
             res.setHeader("Last-Modified", moment(get(record, 'meta.lastUpdated')).toDate());
             
-            // Success
-            JsonRoutes.sendResult(res, {
-              code: 200,
-              data: RestHelpers.prepForFhirTransfer(record)
-            });
+            if(record){
+              // Success
+              JsonRoutes.sendResult(res, {
+                code: 200,
+                data: RestHelpers.prepForFhirTransfer(record)
+              });
+            } else {
+              // Success
+              JsonRoutes.sendResult(res, {
+                code: 404
+              });
+            }
           }
         });
       }
@@ -807,45 +814,39 @@ if(typeof serverRouteManifest === "object"){
                         res.setHeader("Last-Modified", new Date());
                         
           
-                        let createdRecord = Collections[collectionName].findOne({_id: resultId});
+                        let updatedRecord = Collections[collectionName].findOne({_id: resultId});
           
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("createdRecord", createdRecord); }
+                        if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", createdRecord); }
           
-                        // success!
-                        JsonRoutes.sendResult(res, {
-                          code: 200,
-                          data: {
-                            "resourceType": "OperationOutcome",
-                            "issue" : [{ // R!  A single issue associated with the action
-                              "severity" : "information", // R!  fatal | error | warning | information
-                              "code" : "informational", // R!  Error or warning code
-                              "details" : { 
-                                "text": resultId,
-                                "coding": [{
-                                  "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
-                                  "code": "MSG_UPDATED",
-                                  "display": "existing resource updated",
-                                  "userSelected": false
-                                }]
-                               }
-                            }]
-                          }
-                        });
+                        let operationOutcome = {
+                          "resourceType": "OperationOutcome",
+                          "issue" : [{ // R!  A single issue associated with the action
+                            "severity" : "information", // R!  fatal | error | warning | information
+                            "code" : "informational", // R!  Error or warning code
+                            "details" : { 
+                              "text": resultId,
+                              "coding": [{
+                                "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
+                                "code": "MSG_UPDATED",
+                                "display": "existing resource updated",
+                                "userSelected": false
+                              }]
+                             }
+                          }]
+                        }
 
-                        // let recordsToUpdate = Collections[collectionName].find({_id: req.params.id});
-                        // let payload = [];
-          
-                        // recordsToUpdate.forEach(function(record){
-                        //   payload.push(RestHelpers.prepForFhirTransfer(record));
-                        // });
-          
-                        // if(get(Meteor, 'settings.private.trace') === true) { console.log("payload", payload); }
-          
-                        // // success!
-                        // JsonRoutes.sendResult(res, {
-                        //   code: 200,
-                        //   data: Bundle.generate(payload)
-                        // });
+                        if(updatedRecord){
+                          // success!
+                          JsonRoutes.sendResult(res, {
+                            code: 200,
+                            data: RestHelpers.prepForFhirTransfer(updatedRecord)
+                          });
+                        } else {
+                          // success!
+                          JsonRoutes.sendResult(res, {
+                            code: 400
+                          });
+                        }
                       }
                     });    
                   } else {
