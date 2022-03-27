@@ -1152,23 +1152,34 @@ Meteor.startup(function() {
       redirectUri = get(req, 'body.redirect_uri');
     }
 
-    console.log('Redirect: ' + redirectUri)
+    let clientId = "";
+    if(get(req, 'query.client_id')){
+      clientId = get(req, 'query.client_id');
+    } else if(get(req, 'body.client_id')){
+      clientId = get(req, 'body.client_id');
+    }
+
+    let appState = "";
+    if(get(req, 'query.state')){
+      appState = get(req, 'query.state');
+    } else if(get(req, 'body.state')){
+      appState = get(req, 'body.state');
+    }
+
+    console.log("")
+    console.log('Redirect:  ' + redirectUri)
+    console.log('Client ID: ' + clientId)
+    console.log('State:     ' + appState)
     console.log("")
 
-    if(get(req, 'body.client_id')){
-      let client = OAuthClients.findOne({_id: get(req, 'body.client_id')});
+    if(clientId){
+      let client = OAuthClients.findOne({_id: clientId});
       if(client){
         console.log('client', client)
 
-        // if(get(client, 'redirect_uri') !=== redirectUri){
-          // JsonRoutes.sendResult(res, {
-          //   code: 400
-          // });
-        // }
-
         let newAuthorizationCode = Random.id();
 
-        OAuthClients.update({_id: get(req.body, 'client_id')}, {$set: {
+        OAuthClients.update({_id: clientId}, {$set: {
           "authorization_code":  newAuthorizationCode
         }});        
 
@@ -1187,7 +1198,7 @@ Meteor.startup(function() {
             code: 301,
             data: {
               code: newAuthorizationCode,
-              state: get(req.body, 'state', '')
+              state: appState
             }
           });
         } else {

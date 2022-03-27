@@ -816,7 +816,7 @@ if(typeof serverRouteManifest === "object"){
           
                         let updatedRecord = Collections[collectionName].findOne({_id: resultId});
           
-                        if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", createdRecord); }
+                        if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", updatedRecord); }
           
                         let operationOutcome = {
                           "resourceType": "OperationOutcome",
