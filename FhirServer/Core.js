@@ -343,6 +343,8 @@ if(typeof serverRouteManifest === "object"){
               }
             } else {
 
+              // not exporting; just a regular read
+
               records = Collections[collectionName].find({id: req.params.id}).fetch();
 
               // plain ol regular approach
@@ -366,7 +368,9 @@ if(typeof serverRouteManifest === "object"){
                 } else if (records.length > 1){
                   // Success
                   res.setHeader("Content-type", 'application/fhir+json');
-                    
+
+                  let mostRecentRecord;
+
                   if(get(Meteor, 'settings.private.fhir.rest.' + routeResourceType + '.versioning') === "versioned"){
 
                     if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
@@ -374,49 +378,48 @@ if(typeof serverRouteManifest === "object"){
                     // and generate a Bundle payload
                     payload = [];
 
+                    // loop through each matching version
                     records.forEach(function(recordVersion){
                       console.log('recordVersion', recordVersion)
 
-                      let matchIndex = findIndex(payload, function(o) { return o.id === get(recordVersion, 'id')});
-
-                      if(matchIndex){
-                        if(parseInt(get(recordVersion, 'meta.versionId')) > parseInt(get(records[matchIndex], 'meta.versionId'))){
+                      // look for a meta.versionId that is equal to the number of records
+                      // this should be the most-recent record
+                      // NOTE:  this algorithm breaks if we ever delete a version from history
+                      if(parseInt(get(recordVersion, 'meta.versionId')) === records.length){
+                        //if(parseInt(get(recordVersion, 'meta.versionId')) > parseInt(get(records[matchIndex], 'meta.versionId'))){
                           // remove current 
-                          pullAt(payload, matchIndex);
+                          // pullAt(payload, matchIndex);
 
-                          // add the most recent
-                          payload.push({
-                            fullUrl: "Organization/" + get(recordVersion, 'id'),
-                            resource: RestHelpers.prepForFhirTransfer(recordVersion),
-                            request: {
-                              method: "GET",
-                              url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
-                            },
-                            response: {
-                              status: "200"
+                          mostRecentRecord = recordVersion;
+
+                          if(get(recordVersion, 'meta.lastUpdated')){
+                            hasVersionedLastModified = true;
+                            if(moment(get(recordVersion, 'meta.lastUpdated')) > moment(lastModified)){
+                              lastModified = moment(get(recordVersion, 'meta.lastUpdated')).toDate();
                             }
-                          });
-                        } 
-                      } else {
-                        payload.push({
-                          fullUrl: "Organization/" + get(recordVersion, 'id'),
-                          resource: RestHelpers.prepForFhirTransfer(recordVersion),
-                          request: {
-                            method: "GET",
-                            url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
-                          },
-                          response: {
-                            status: "200"
-                          }
-                        });
-                      }
-                      
-                      if(get(recordVersion, 'meta.lastUpdated')){
-                        hasVersionedLastModified = true;
-                        if(moment(get(recordVersion, 'meta.lastUpdated')) > moment(lastModified)){
-                          lastModified = moment(get(recordVersion, 'meta.lastUpdated')).toDate();
-                        }
+                          } 
+
+                        //   // add the most recent
+                        //   payload.push();
+                        // //} 
                       } 
+
+                      // // if we are doing a versioned history, and pull all of the records
+                      // if(false){
+                      //   payload.push({
+                      //     fullUrl: "Organization/" + get(recordVersion, 'id'),
+                      //     resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                      //     request: {
+                      //       method: "GET",
+                      //       url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
+                      //     },
+                      //     response: {
+                      //       status: "200"
+                      //     }
+                      //   });
+                      // }
+                      
+                      
                     });  
                     
                     if(hasVersionedLastModified){
@@ -426,20 +429,17 @@ if(typeof serverRouteManifest === "object"){
 
                   JsonRoutes.sendResult(res, {
                     code: 200,
-                    data: Bundle.generate(payload)
+                    // data: Bundle.generate(payload)
+                    data: RestHelpers.prepForFhirTransfer(mostRecentRecord)
                   });
                 }
                 
               } else {
+                // search didn't find an error; something is broken
                 // Not Found
                 JsonRoutes.sendResult(res, {
                   code: 404
                 });
-                
-                //   // Gone
-                // JsonRoutes.sendResult(res, {
-                //   code: 410
-                // });
               }
             }
 

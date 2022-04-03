@@ -1,6 +1,7 @@
 {
   "public": {
     "title": "NodeOnFHIR Server",
+    "appVersion": "0.1.0",
     "fhirVersion": "4.0.1",
     "smartOnFhir": [{
       "vendor": "SmartHealth IT",

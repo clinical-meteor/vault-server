@@ -33,7 +33,7 @@ const Server = {
       "resourceType": "CapabilityStatement",
       "url": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.fhirPath'),
       "name": get(Meteor, 'settings.public.title'),
-      "version": get(Meteor, 'settings.public.version'),
+      "version": get(Meteor, 'settings.public.appVersion', "0.1.0"),
       "status": "draft",
       "experimental": true,
       "publisher": "MITRE, Inc",
