@@ -29,6 +29,8 @@ const pkijs = require("pkijs");
 const pvutils = require('pvutils');
 const fs = require('fs');
 
+import InboundChannel from '../lib/InboundRequests.schema.js';
+console.log('InboundChannel', InboundChannel)
 
 // import Hex from '@lapo/asn1js/hex';
 // import format from 'ecdsa-sig-formatter';
@@ -359,6 +361,23 @@ function certificateIsRevoked(serialNumber, revokationList){
   return isRevoked;
 }
 
+function preParse(request){
+  if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
+    process.env.TRACE && console.log('Inbound request', request)
+    if(InboundChannel){
+      InboundChannel.InboundRequests.insert({
+        date: new Date(),
+        method: get(request, 'method'),
+        url: get(request, 'url'),
+        body: get(request, 'body'),
+        query: get(request, 'query'),
+        headers: get(request, 'headers')
+      });
+    }
+  }
+  return request;
+}
+
 Meteor.startup(function() {
   console.log('========================================================================');
   console.log('Generating SMART on FHIR / OAuth routes...');
@@ -369,6 +388,8 @@ Meteor.startup(function() {
     console.log('========================================================================');
     console.log('========================================================================');
     console.log('POST ' + '/oauth/registration');
+
+    preParse(req);
 
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -1077,6 +1098,8 @@ Meteor.startup(function() {
     console.log('========================================================================');
     console.log('POST ' + '/oauth/token');
 
+    preParse(req);
+
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
 
@@ -1137,6 +1160,8 @@ Meteor.startup(function() {
   JsonRoutes.add("get", "/oauth/authorize", function (req, res, next) {
     console.log('========================================================================');
     console.log('GET ' + '/oauth/authorize');
+
+    preParse(req);
 
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -1250,6 +1275,8 @@ Meteor.startup(function() {
     console.log('========================================================================');
     console.log('GET ' + '/authorizations/manage');
 
+    preParse(req);
+
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
 
@@ -1269,6 +1296,8 @@ Meteor.startup(function() {
   JsonRoutes.add("get", "/authorizations/introspect", function (req, res, next) {
     console.log('========================================================================');
     console.log('GET ' + '/authorizations/introspect');
+
+    preParse(req);
 
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -1290,6 +1319,8 @@ Meteor.startup(function() {
     console.log('========================================================================');
     console.log('POST ' + '/authorizations/revoke');
 
+    preParse(req);
+    
     res.setHeader('Content-type', 'application/json');
     res.setHeader("Access-Control-Allow-Origin", "*");
 

@@ -6,6 +6,8 @@ import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
 
+import InboundRequests from '../lib/InboundRequests.schema.js';
+
 import { 
   AllergyIntolerances,
   AuditEvents,
@@ -179,6 +181,16 @@ function parseUserAuthorization(req){
   return isAuthorized;
 }
 
+function preParse(request){
+
+  if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
+    process.env.TRACE && console.log('Inbound request', request)
+    InboundRequests.insert(request);
+  }
+
+  return request;
+}
+
 //==========================================================================================
 // Route Manifest  
 
@@ -248,6 +260,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('> GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
   
+          preParse(req);
+
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -290,6 +304,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
   
+          preParse(req);
+
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -458,6 +474,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
   
+          preParse(req);
+
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -518,6 +536,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('>> GET ' + fhirPath + "/" + routeResourceType, req.query); }
+
+          preParse(req);
 
           console.log('req.originalUrl', req.originalUrl)
 
@@ -622,6 +642,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("post", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType); }
+
+          preParse(req);
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);          
@@ -745,6 +767,8 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
+          preParse(req);
+
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -1019,6 +1043,8 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
+          preParse(req);
+
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -1142,6 +1168,8 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('DELETE /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
 
+          preParse(req);
+
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
@@ -1194,6 +1222,8 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("post", "/" + fhirPath + "/" + routeResourceType + "/:param", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)); }
+
+          preParse(req);
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1325,6 +1355,8 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('??? GET /' + fhirPath + '/' + routeResourceType + '?' + JSON.stringify(req.query)); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('params', req.params); }
+
+          preParse(req);
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           
