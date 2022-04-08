@@ -1247,30 +1247,45 @@ Meteor.startup(function() {
                 } 
               } else {
                 JsonRoutes.sendResult(res, {
-                  code: 412
-                });
+                  code: 412,
+                  data: {
+                    "error_message": 'Provided redirect did not match registered redirects...'
+                  }  
+                  });
               }              
             } else {
               JsonRoutes.sendResult(res, {
-                code: 412
+                code: 412,
+                data: {
+                  "error_message": 'No redirects registered with client...'
+                }  
               });
             }
           } else {
             console.log('No redirect URI found...')
             JsonRoutes.sendResult(res, {
-              code: 400
+              code: 400,
+              data: {
+                "error_message": 'No redirect URI found...'
+              }
             });
           }  
         } else {
           console.log('No client record found matching that client_id');
           JsonRoutes.sendResult(res, {
-            code: 401
+            code: 401,
+            data: {
+              "error_message": 'No client record found matching that client_id'
+            }
           });
         }
       } else {
         console.log('No client_id in request.  Malformed request.');
         JsonRoutes.sendResult(res, {
-          code: 412
+          code: 412,
+          data: {
+            "error_message": 'No client_id in request.  Malformed request.'
+          }
         });
       }  
     }
