@@ -299,7 +299,6 @@ if(typeof serverRouteManifest === "object"){
       // read
       // https://www.hl7.org/fhir/http.html#read
       if(serverRouteManifest[routeResourceType].interactions.includes('read')){
-
         // read
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
@@ -468,70 +467,6 @@ if(typeof serverRouteManifest === "object"){
           }
         });
         
-        
-
-        // history-instance
-        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
-  
-          preParse(req);
-
-          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
-          res.setHeader("ETag", fhirVersion);
-
-          let isAuthorized = parseUserAuthorization(req);
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
-
-            let record;
-            let lastModified = moment().subtract(100, 'years');
-            let hasVersionedLastModified = false;
-
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
-
-            let records = Collections[collectionName].find({id: req.params.id});
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
-
-            // and generate a Bundle payload
-            payload = [];
-
-            records.forEach(function(recordVersion){
-              payload.push({
-                fullUrl: "Organization/" + get(recordVersion, 'id'),
-                resource: RestHelpers.prepForFhirTransfer(recordVersion),
-                request: {
-                  method: "GET",
-                  url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
-                },
-                response: {
-                  status: "200"
-                }
-              });
-              if(get(recordVersion, 'meta.lastUpdated')){
-                hasVersionedLastModified = true;
-                if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
-                  lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
-                }
-              } 
-            });  
-
-            res.setHeader("content-type", 'application/fhir+json');
-            if(hasVersionedLastModified){
-              res.setHeader("Last-Modified", lastModified.toDate());
-            }
-            
-            // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-
-            // Success
-            JsonRoutes.sendResult(res, {
-              code: 200,
-              data: Bundle.generate(payload, "history")
-            });
-          }
-        });
-
-
         // search-type
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
@@ -634,6 +569,71 @@ if(typeof serverRouteManifest === "object"){
             });
           }
         });
+      }
+
+      // history-instance
+      // https://www.hl7.org/fhir/http.html#history-instance
+      if(serverRouteManifest[routeResourceType].interactions.includes('history-instance')){
+        // history-instance
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
+          if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
+  
+          preParse(req);
+
+          res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+
+          let isAuthorized = parseUserAuthorization(req);
+          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+            let record;
+            let lastModified = moment().subtract(100, 'years');
+            let hasVersionedLastModified = false;
+
+            console.log('req.query', req.query)
+            console.log('req.params', req.params)
+
+            let records = Collections[collectionName].find({id: req.params.id});
+            if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
+
+            // and generate a Bundle payload
+            payload = [];
+
+            records.forEach(function(recordVersion){
+              payload.push({
+                fullUrl: "Organization/" + get(recordVersion, 'id'),
+                resource: RestHelpers.prepForFhirTransfer(recordVersion),
+                request: {
+                  method: "GET",
+                  url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
+                },
+                response: {
+                  status: "200"
+                }
+              });
+              if(get(recordVersion, 'meta.lastUpdated')){
+                hasVersionedLastModified = true;
+                if(moment(get(recordVersion, 'meta.lastUpdated')) > lastModified){
+                  lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
+                }
+              } 
+            });  
+
+            res.setHeader("content-type", 'application/fhir+json');
+            if(hasVersionedLastModified){
+              res.setHeader("Last-Modified", lastModified.toDate());
+            }
+            
+            // res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+
+            // Success
+            JsonRoutes.sendResult(res, {
+              code: 200,
+              data: Bundle.generate(payload, "history")
+            });
+          }
+        });        
       }
 
       // update-create 

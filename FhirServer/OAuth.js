@@ -378,6 +378,32 @@ function preParse(request){
   return request;
 }
 
+function fuzzyMatch(redirect_uris, redirectUri){
+  let fuzzyMatch = false;
+  let redirectHostname = new URL(redirectUri);
+  process.env.DEBUG && console.log('redirectHostname', redirectHostname.hostname);
+
+  if(Array.isArray(redirect_uris)){
+    redirect_uris.forEach(function(redirect_uri){
+      let uriHostname = new URL(redirect_uri)
+      process.env.DEBUG && console.log('uriHostname', uriHostname.hostname)
+      if(uriHostname.hostname === redirectHostname.hostname){
+        fuzzyMatch = true;
+      }
+    })
+  }
+  return fuzzyMatch;
+}
+function setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode){
+  if(!responseType){
+    res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
+  } else if(responseType !== "code"){
+    res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
+  } else {
+    res.setHeader("Location", redirectUri + "?state=" + appState + "&code=" + newAuthorizationCode);
+  }  
+}
+
 Meteor.startup(function() {
   console.log('========================================================================');
   console.log('Generating SMART on FHIR / OAuth routes...');
@@ -1228,14 +1254,9 @@ Meteor.startup(function() {
               if(client.redirect_uris.includes(redirectUri)){
                 if(appState.length === 0){
                   res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
-                } else {            
-                  if(!responseType){
-                    res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
-                  } else if(responseType !== "code"){
-                    res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
-                  } else {
-                    res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
-                  }  
+                } else {  
+                  
+                  setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode)
   
                   JsonRoutes.sendResult(res, {
                     code: 301,
@@ -1245,6 +1266,16 @@ Meteor.startup(function() {
                     }
                   });      
                 } 
+              } else if (fuzzyMatch(client.redirect_uris, redirectUri)) {
+
+                setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode)
+                JsonRoutes.sendResult(res, {
+                  code: 301,
+                  data: {
+                    code: newAuthorizationCode,
+                    state: appState
+                  }
+                });     
               } else {
                 JsonRoutes.sendResult(res, {
                   code: 412,
