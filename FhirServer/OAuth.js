@@ -1265,17 +1265,7 @@ Meteor.startup(function() {
                       state: appState
                     }
                   });      
-                } 
-              } else if (fuzzyMatch(client.redirect_uris, redirectUri)) {
-
-                setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode)
-                JsonRoutes.sendResult(res, {
-                  code: 301,
-                  data: {
-                    code: newAuthorizationCode,
-                    state: appState
-                  }
-                });     
+                }    
               } else {
                 JsonRoutes.sendResult(res, {
                   code: 412,
@@ -1293,13 +1283,29 @@ Meteor.startup(function() {
               });
             }
           } else {
-            console.log('No redirect URI found...')
-            JsonRoutes.sendResult(res, {
-              code: 400,
-              data: {
-                "error_message": 'No redirect URI found...'
-              }
-            });
+            console.log('No redirect URI provided.')
+
+            if(client){
+              console.log('Using what was provided during registration.')
+              setRedirectHeader(res, responseType, get(client, 'redirect_uris.0', ''), appState, newAuthorizationCode)
+              JsonRoutes.sendResult(res, {
+                code: 301,
+                data: {
+                  code: newAuthorizationCode,
+                  state: appState,
+                  message: 'No redirect URI provided. Using what was provided during registration.'
+                }
+              });     
+
+            } else {
+              console.log('No known redirect URI.')
+              JsonRoutes.sendResult(res, {
+                code: 400,
+                data: {
+                  "error_message": 'No known redirect URI.'
+                }
+              });
+           }
           }  
         } else {
           console.log('No client record found matching that client_id');
