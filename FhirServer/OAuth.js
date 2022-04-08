@@ -1207,67 +1207,72 @@ Meteor.startup(function() {
     console.log('Client ID: ' + clientId)
     console.log('State:     ' + appState)
     console.log("")
-
-    if(clientId){
-      let client = OAuthClients.findOne({_id: clientId});
-      if(client){
-        console.log('client', client)
-
-        let newAuthorizationCode = Random.id();
-
-        OAuthClients.update({_id: clientId}, {$set: {
-          "authorization_code":  newAuthorizationCode
-        }});        
-
-        if(redirectUri){
-          if(Array.isArray(client.redirect_uris)){
-            if(client.redirect_uris.includes(redirectUri)){
-              if(!appState){
-                res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
-              } else {            
-                if(!responseType){
-                  res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
-                } else if(responseType !== "code"){
-                  res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
-                } else {
-                  res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
-                }  
-
+    
+    if(redirectUri && (appState.length === 0)){
+      res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
+      JsonRoutes.sendResult(res, { code: 301 });     
+    } else {
+      if(clientId){
+        let client = OAuthClients.findOne({_id: clientId});
+        if(client){
+          console.log('client', client)
+  
+          let newAuthorizationCode = Random.id();
+  
+          OAuthClients.update({_id: clientId}, {$set: {
+            "authorization_code":  newAuthorizationCode
+          }});        
+  
+          if(redirectUri){
+            if(Array.isArray(client.redirect_uris)){
+              if(client.redirect_uris.includes(redirectUri)){
+                if(appState.length === 0){
+                  res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
+                } else {            
+                  if(!responseType){
+                    res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
+                  } else if(responseType !== "code"){
+                    res.setHeader("Location", redirectUri + "?response_type=wrong_type&error=invalid_request&state=" + appState);
+                  } else {
+                    res.setHeader("Location", redirectUri + "?state=" +appState + "&code=" + newAuthorizationCode);
+                  }  
+  
+                  JsonRoutes.sendResult(res, {
+                    code: 301,
+                    data: {
+                      code: newAuthorizationCode,
+                      state: appState
+                    }
+                  });      
+                } 
+              } else {
                 JsonRoutes.sendResult(res, {
-                  code: 301,
-                  data: {
-                    code: newAuthorizationCode,
-                    state: appState
-                  }
-                });      
-              } 
+                  code: 412
+                });
+              }              
             } else {
               JsonRoutes.sendResult(res, {
                 code: 412
               });
-            }              
+            }
           } else {
+            console.log('No redirect URI found...')
             JsonRoutes.sendResult(res, {
-              code: 412
+              code: 400
             });
-          }
+          }  
         } else {
-          console.log('No redirect URI found...')
+          console.log('No client record found matching that client_id');
           JsonRoutes.sendResult(res, {
-            code: 400
+            code: 401
           });
-        }  
+        }
       } else {
-        console.log('No client record found matching that client_id');
+        console.log('No client_id in request.  Malformed request.');
         JsonRoutes.sendResult(res, {
-          code: 401
+          code: 412
         });
-      }
-    } else {
-      console.log('No client_id in request.  Malformed request.');
-      JsonRoutes.sendResult(res, {
-        code: 412
-      });
+      }  
     }
   });
 
