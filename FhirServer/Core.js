@@ -264,7 +264,6 @@ if(typeof serverRouteManifest === "object"){
             });            
             if(get(Meteor, 'settings.private.trace') === true) { console.log('record', record); }
             
-            res.setHeader("content-type", 'application/fhir+json');
             res.setHeader("Last-Modified", moment(get(record, 'meta.lastUpdated')).toDate());
             
             if(record){
