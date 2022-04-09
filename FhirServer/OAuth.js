@@ -45,7 +45,6 @@ console.log('emrDirectPem', emrDirectPem);
 // look into njwt
 import jwt from 'jsonwebtoken';
 import forge from 'node-forge';
-import { url } from 'inspector';
 
 // creates a CA store
 var caStore = forge.pki.createCaStore([emrDirectPem]);
@@ -1257,47 +1256,53 @@ Meteor.startup(function() {
                   res.setHeader("Location", redirectUri + "?state=unspecified&error=invalid_request");
                 } else {  
                   
-                  setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode);
+                  setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode)
   
                   JsonRoutes.sendResult(res, {
-                    code: 301,
+                    code: 302,
                     data: {
                       code: newAuthorizationCode,
                       state: appState
                     }
                   });      
-                } 
+                }    
               } else {
-
-                // IIB3b
-                // Todo, fall back to first pre-registered HTTPS url.  
-                let resolvedRedirectUri = "";
-
-                let receivedUri = new URL(redirectUri);
-                if(receivedUri.protocol === "https:"){
-                  resolvedRedirectUri = receivedUri;
-                } else {
-                  client.redirect_uris.forEach(function(uri){
-                    let newUrl = new URL(uri);
-                    if(newUrl.protocol === "https:"){
-                      resolvedRedirectUri = uri;
-                    }
-                  });  
-                }
-
-                setRedirectHeader(res, responseType, resolvedRedirectUri, appState, newAuthorizationCode)
                 JsonRoutes.sendResult(res, {
-                  code: 301,
+                  code: 412,
                   data: {
-                    code: newAuthorizationCode,
-                    state: appState,
-                    message: 'No redirect URI provided. Using what was provided during registration.'
-                  }
-                }); 
-              }
+                    "error_message": 'Provided redirect did not match registered redirects...'
+                  }  
+                });
+                // // IIB3b
+                // // Todo, fall back to first pre-registered HTTPS url.                  
+                // let resolvedRedirectUri = "";
+
+                // let receivedUri = new URL(redirectUri);
+                // if(receivedUri.protocol === "https:"){
+                //   resolvedRedirectUri = receivedUri;
+                // } else {
+                //   client.redirect_uris.forEach(function(uri){
+                //     let newUrl = new URL(uri);
+                //     if(newUrl.protocol === "https:"){
+                //       resolvedRedirectUri = uri;
+                //     }
+                //   });  
+                // }
+
+                // setRedirectHeader(res, responseType, resolvedRedirectUri, appState, newAuthorizationCode)
+                // JsonRoutes.sendResult(res, {
+                //   code: 301,
+                //   data: {
+                //     code: newAuthorizationCode,
+                //     state: appState,
+                //     message: 'No redirect URI provided. Using what was provided during registration.'
+                //   }
+                // }); 
+
+              }              
             } else {
               JsonRoutes.sendResult(res, {
-                code: 412,
+                code: 406,
                 data: {
                   "error_message": 'No redirects registered with client...'
                 }  
@@ -1340,7 +1345,7 @@ Meteor.startup(function() {
       } else {
         console.log('No client_id in request.  Malformed request.');
         JsonRoutes.sendResult(res, {
-          code: 412,
+          code: 400,
           data: {
             "error_message": 'No client_id in request.  Malformed request.'
           }
