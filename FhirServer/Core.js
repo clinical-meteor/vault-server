@@ -6,7 +6,7 @@ import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
 
-import InboundRequests from '../lib/InboundRequests.schema.js';
+import InboundChannel from '../lib/InboundRequests.schema.js';
 
 import { 
   AllergyIntolerances,
@@ -185,7 +185,16 @@ function preParse(request){
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
-    InboundRequests.insert(request);
+    if(InboundChannel){
+      InboundChannel.InboundRequests.insert({
+        date: new Date(),
+        method: get(request, 'method'),
+        url: get(request, 'url'),
+        body: get(request, 'body'),
+        query: get(request, 'query'),
+        headers: get(request, 'headers')
+      });
+    }
   }
 
   return request;
