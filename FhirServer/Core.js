@@ -168,8 +168,10 @@ function parseUserAuthorization(req){
     // edit company info
     // edit practitioners
 
-    if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
+    // if(get(Meteor, 'settings.private.trace') === true) { console.log('accessToken', accessToken); }
     //if(get(Meteor, 'settings.privattraceug') === true) { console.log('accessToken.userId', accessToken.userId); } 
+
+    process.env.TRACE && console.log('accessToken', accessToken); 
 
     if(accessToken){
       isAuthorized = true;
@@ -302,6 +304,15 @@ if(typeof serverRouteManifest === "object"){
               });
             }
           }
+        });
+      } else {
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
+          JsonRoutes.sendResult(res, {
+            code: 501
+          });
         });
       }
 
@@ -577,6 +588,24 @@ if(typeof serverRouteManifest === "object"){
               code: 401
             });
           }
+        });
+      } else {
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
+          JsonRoutes.sendResult(res, {
+            code: 501
+          });
+        });
+
+        JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
+          JsonRoutes.sendResult(res, {
+            code: 501
+          });
         });
       }
 
@@ -1049,8 +1078,8 @@ if(typeof serverRouteManifest === "object"){
 
       if(serverRouteManifest[routeResourceType].interactions.includes('patch')){
         JsonRoutes.add("patch", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
-          if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
+          process.env.DEBUG && console.log('================================================================'); 
+          process.env.DEBUG && console.log('PATCH /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); 
         
           preParse(req);
 
@@ -1066,29 +1095,33 @@ if(typeof serverRouteManifest === "object"){
             if (req.body) {
               let incomingRecord = cloneDeep(req.body);
       
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('req.body', req.body); }
+              process.env.TRACE && console.log('req.body', req.body); 
       
               incomingRecord.resourceType = routeResourceType;
               incomingRecord = RestHelpers.toMongo(incomingRecord);
               incomingRecord = RestHelpers.prepForUpdate(incomingRecord);
       
-              if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------'); }
-              if(get(Meteor, 'settings.private.debug') === true) { console.log('Received a new record to PUT into the database', JSON.stringify(newRecord, null, 2));             }
+              process.env.DEBUG && console.log('-----------------------------------------------------------'); 
+              process.env.DEBUG && console.log('Received a new record to PATCH into the database', JSON.stringify(newRecord, null, 2));             
       
 
               if(typeof Collections[collectionName] === "object"){
                 let numRecordsToUpdate = Collections[collectionName].find({id: req.params.id}).count();
 
-                if(get(Meteor, 'settings.private.debug') === true) { console.log('Number of records found matching the id: ', numRecordsToUpdate); } 
+                process.env.DEBUG && console.log('Number of records found matching the id: ', numRecordsToUpdate); 
                 
                 let newlyAssignedId;
         
-                if(numRecordsToUpdate > 0){
+                if(numRecordsToUpdate > 1){
                   if(get(Meteor, 'settings.private.debug') === true) { console.log('Found existing records; this is an update interaction, not a create interaction'); }
                   if(get(Meteor, 'settings.private.debug') === true) { console.log(numRecordsToUpdate + ' records found...'); }
 
-                  console.log('req.query', req.query);
-
+                  if(process.env.DEBUG){
+                    console.log('req.query', req.query);
+                    console.log('req.params', req.params);
+                    console.log('req.body', req.body);  
+                  }
+                  
                   let setObjectPatch = {};
                   Object.keys(req.query).forEach(function(key){
                     setObjectPatch[key] = get(req.body, key);
@@ -1111,48 +1144,21 @@ if(typeof serverRouteManifest === "object"){
                   let patchedRecord = Object.assign(currentRecord, incomingRecord);
 
                   console.log('patchedRecord', patchedRecord);
-
-                  // newlyAssignedId = Collections[collectionName].update({id: req.params.id}, {$set: newRecord },  schemaValidationConfig, function(error, result){
-                  //   if (error) {
-                  //     if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/' + routeResourceType + '/' + req.params.id + "[error]", error); }
-        
-                  //     // Bad Request
-                  //     JsonRoutes.sendResult(res, {
-                  //       code: 400,
-                  //       data: error.message
-                  //     });
-                  //   }
-                  //   if (result) {
-                  //     if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
-                  //     // keep the following; needed for SANER
-                  //     // needs a conditional clause
-                  //     // res.setHeader("MeasureReport", fhirPath + "/" + routeResourceType + "/" + result);
-                  //     res.setHeader("Last-Modified", new Date());
-                  //     res.setHeader("ETag", fhirVersion);
-        
-                  //     // this isn't a versioned collection, so we expect only a single record
-                  //     let updatedRecord = Collections[collectionName].findOne({id: req.params.id});
-        
-                  //     if(updatedRecord){
-                  //       if(get(Meteor, 'settings.private.trace') === true) { console.log("updatedRecord", updatedRecord); }
-        
-                  //       // success!
-                  //       JsonRoutes.sendResult(res, {
-                  //         code: 200,
-                  //         data: RestHelpers.prepForFhirTransfer(updatedRecord)
-                  //       });
-
-                  //     } else {
-                  //       // success!
-                  //       JsonRoutes.sendResult(res, {
-                  //         code: 500
-                  //       });
-                  //     }                        
-                  //   }
-                  // });
+                  
+                  JsonRoutes.sendResult(res, {
+                    data: patchedRecord,
+                    code: 204
+                  });
+                } else if (numRecordsToUpdate === 0){
+                  JsonRoutes.sendResult(res, {
+                    code: 404
+                  });
                 }
               } else {
                 console.log(collectionName + ' collection not found.')
+                JsonRoutes.sendResult(res, {
+                  code: 500
+                });
               }
             } else {
               // no body; Unprocessable Entity
@@ -1167,6 +1173,15 @@ if(typeof serverRouteManifest === "object"){
             });
           }
 
+        });
+      } else {
+        JsonRoutes.add("patch", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
+          JsonRoutes.sendResult(res, {
+            code: 501
+          });
         });
       }
 
@@ -1222,6 +1237,15 @@ if(typeof serverRouteManifest === "object"){
               code: 401
             });
           }
+        });
+      }  else {
+        JsonRoutes.add("delete", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
+          res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
+          res.setHeader("ETag", fhirVersion);
+          
+          JsonRoutes.sendResult(res, {
+            code: 501
+          });
         });
       }
 
