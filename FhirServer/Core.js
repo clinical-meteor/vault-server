@@ -1306,41 +1306,42 @@ if(typeof serverRouteManifest === "object"){
 
             //==============================================================================
             // this is operator logic, and will probably need to go into a switch statement
+
+            // post /Organization/$match
             } else if (req.params.param.includes('$match')) {
               console.log("$MATCH!!!!");
 
               console.log('req.body.name', get(req, 'body.name'));
 
-              if(has(req, 'body.name')){
-                matchingRecords = Collections[collectionName].find({name: get(req, 'body.name')}).fetch();
-                console.log('matchingRecords', matchingRecords);
-                
-                let payload = [];
-  
-                matchingRecords.forEach(function(record){
-                  // console.log('record', get(record, 'name'))
-                  payload.push({
-                    fullUrl: routeResourceType + "/" + get(record, 'id'),
-                    resource: RestHelpers.prepForFhirTransfer(record),
-                    request: {
-                      method: "POST",
-                      url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
-                    },
-                    response: {
-                      status: "200"
-                    }
-                  });
-                });
-  
-                console.log('payload', payload);
-  
-                // Success
-                JsonRoutes.sendResult(res, {
-                  code: 200,
-                  data: Bundle.generate(payload)
-                });  
-              } else {
-                // Success
+              let generatedQuery = {};
+              let weighting = 0;
+
+              // full name - weighting: .50
+              if(typeof get(req, 'body.name') === "string"){
+                weighting = .5;
+                generatedQuery["name"] = {$regex: get(req, 'body.name')}
+              }               
+
+              // full name - weighting: .50
+              if(typeof get(req, 'body.name[0].text') === "string"){
+                weighting = .5;
+                generatedQuery["name.text"] = {$regex: get(req, 'body.name[0].text')}
+              }               
+
+              // NPI number - weighting: .99
+              if(typeof get(req, 'body.identifier[0].value') === "string"){
+                weighting = .99;
+                generatedQuery["identifier.value"] = get(req, 'body.identifier[0].value')
+              } 
+              
+
+              console.log('generatedQuery', generatedQuery);
+              matchingRecords = Collections[collectionName].find(generatedQuery).fetch();
+              console.log('matchingRecords.length', matchingRecords.length);
+
+              let payload = [];
+
+              if(matchingRecords.length === 0 ){
                 JsonRoutes.sendResult(res, {
                   code: 400,
                   data: {
@@ -1357,8 +1358,42 @@ if(typeof serverRouteManifest === "object"){
                     }                
                   }
                 });
-              }
+              } else {
+                matchingRecords.forEach(function(record){
+                  // console.log('record', get(record, 'name'))
 
+                  record.extension = [{
+                    url: "https://build.fhir.org/ig/HL7/fhir-directory-attestation/match-quality",
+                    valueDecimal: weighting
+                  }];
+
+                  delete record.text;
+
+
+                  payload.push({
+                    fullUrl: routeResourceType + "/" + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record),
+                    request: {
+                      method: "POST",
+                      url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
+                    },
+                    response: {
+                      status: "200"
+                    }
+                  });
+                });
+  
+                console.log('payload', payload);
+
+                let payloadBundle = Bundle.generate(payload);
+                
+  
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 200,
+                  data: payloadBundle
+                }); 
+              }
             } 
             //==============================================================================
 
