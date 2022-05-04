@@ -8,6 +8,9 @@ import { Random } from 'meteor/random';
 
 import InboundChannel from '../lib/InboundRequests.schema.js';
 
+import jwt from 'jsonwebtoken';
+import forge from 'node-forge';
+
 import { 
   AllergyIntolerances,
   AuditEvents,
@@ -201,7 +204,50 @@ function preParse(request){
 
   return request;
 }
+function signProvenance(record){
+  let publicKey = get(Meteor, 'settings.private.x509.publicKey');
+  let privateKey = get(Meteor, 'settings.private.x509.privateKey');
 
+  delete record._document;
+  delete record._id;
+
+  console.log('signProvenance', record)
+
+  var token = jwt.sign(JSON.stringify(record), privateKey, { algorithm: 'RS256'})
+
+  let provenanceRecord = {
+    resourceType: "Provenance",                  
+    target: [],
+    signature: [{
+      type: [{
+        system: 'urn:iso-astm:E1762-95:2013',
+        code: '1.2.840.10065.1.12.1.14',
+        display: 'Source Signature'
+      }],
+      when: new Date(),
+      who: {
+        display: 'National Directory'
+      },
+      data: token
+    }]
+  }
+
+  if(Array.isArray(record)){
+    record.forEach(function(rec){
+      provenanceRecord.target.push({
+        reference: get(rec, 'id'),
+        type: get(rec, 'referenceId'),
+      });  
+    })
+  } else {
+    provenanceRecord.target.push({
+      reference: get(record, 'id'),
+      type: get(record, 'referenceId'),
+    });  
+  }
+
+  return JSON.stringify(provenanceRecord)
+}
 //==========================================================================================
 // Route Manifest  
 
@@ -328,6 +374,7 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
+
           let isAuthorized = parseUserAuthorization(req);
   
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
@@ -368,6 +415,7 @@ if(typeof serverRouteManifest === "object"){
                 process.env.DEBUG && console.log('jsonPayload', jsonPayload);
 
                 res.setHeader('Content-disposition', 'attachment; filename=' + collectionName + ".fhir");
+                res.setHeader("x-provenance", signProvenance(jsonPayload));
 
                 // Success
                 JsonRoutes.sendResult(res, {
@@ -394,6 +442,7 @@ if(typeof serverRouteManifest === "object"){
                 } else if (records.length === 1){
                   res.setHeader("Content-type", 'application/fhir+json');
                   res.setHeader("Last-Modified", lastModified);
+                  res.setHeader("x-provenance", signProvenance(records[0]));
 
                   JsonRoutes.sendResult(res, {
                     code: 200,
@@ -460,6 +509,8 @@ if(typeof serverRouteManifest === "object"){
                       res.setHeader("Last-Modified", lastModified);
                     }
                   }
+
+                  res.setHeader("x-provenance", signProvenance(mostRecentRecord));
 
                   JsonRoutes.sendResult(res, {
                     code: 200,
