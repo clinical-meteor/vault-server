@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.3.74',
+    version: '8.4.1',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -21,6 +21,9 @@ Package.onUse(function(api) {
     api.use('check', 'server');
     api.use('meteorhacks:async@1.0.0', 'server');
 
+    // IPFS
+    api.addFiles('IpfsServer/server.js', 'server');
+
     // database drivers, data cursors
     api.use('mongo');
     api.use('aldeed:collection2@3.5.0');
@@ -30,7 +33,7 @@ Package.onUse(function(api) {
     // FHIR data layer
     api.use('clinical:json-routes@2.3.0');
     api.use('clinical:hl7-resource-datatypes@4.0.5');
-    api.use('clinical:hl7-fhir-data-infrastructure@6.23.8');
+    api.use('clinical:hl7-fhir-data-infrastructure@6.24.1');
 
     // REST Endpoints
     api.addFiles('FhirServer/main.js', 'server');
@@ -44,9 +47,12 @@ Package.onUse(function(api) {
     api.addFiles('OAuthServer/server.js', 'server');
     api.addFiles('OAuthServer/client.js', 'client');
 
+    // UDAP
     api.addAssets('certs/EMRDirectTestCA.crt', 'server');
     api.addAssets('certs/EMRDirectTestClientSubCA.crt', 'server');
 
+    
+    
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
     api.addFiles('lib/Base64.js');
@@ -110,7 +116,13 @@ Npm.depends({
     "openssl-wrapper": "0.3.4",
     "bluebird": "3.7.2",
 
-    "node-fetch": "3.2.1"
+    "node-fetch": "3.2.1",
+
+    "ipfs-http-client": "54.0.2",
+    "ipfs-core": "0.12.2",
+    "it-all": "1.0.4",
+    "uint8arrays": "3.0.0",
+    "node-abort-controller": "3.0.1"
 });
 
 

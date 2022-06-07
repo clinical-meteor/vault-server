@@ -1,5 +1,6 @@
 
 import RestHelpers from './RestHelpers';
+import fhirPathToMongo from './FhirPath';
 
 import { get, has, set, unset, cloneDeep, pullAt, findIndex } from 'lodash';
 import moment from 'moment';
@@ -62,6 +63,24 @@ import {
   FhirUtilities
 } from 'meteor/clinical:hl7-fhir-data-infrastructure';
 
+// import { create } from 'ipfs-http-client';
+
+import * as IPFS from 'ipfs-core';
+import { AbortController } from "node-abort-controller";
+import { concat } from 'uint8arrays/concat';
+import { toString } from 'uint8arrays/to-string';
+
+
+let ipfsNode;
+if(process.env.ENABLE_IPFS){
+  // connect to the default API
+  ipfsNode = await IPFS.create({ host: 'localhost', port: '3005', protocol: 'http' })
+  // ipfsNode = create({ host: 'localhost', port: '3005', protocol: 'http' });
+  
+  // ipfsNode = create();
+
+  // console.log('ipfs.getEndpointConfig', ipfsNode.getEndpointConfig())
+}
 
 //==========================================================================================
 // Collections Namespace  
@@ -123,6 +142,7 @@ if(Meteor.isServer){
   Collections.VerificationResults = VerificationResults;
 }
 
+
 //==========================================================================================
 // Global Configs  
 
@@ -154,7 +174,7 @@ if(typeof OAuthServerConfig === 'object'){
 // // })
 
 //==========================================================================================
-// Global Method Overrides
+// Helper Methods
 
 function parseUserAuthorization(req){
   let isAuthorized = false;
@@ -248,6 +268,34 @@ function signProvenance(record){
 
   return JSON.stringify(provenanceRecord)
 }
+
+async function exportToIpfsNode(){
+  let operationOutcome = {
+    "resourceType": "OperationOutcome",
+    "issue" : [{ // R!  A single issue associated with the action
+      "severity" : "information", // R!  fatal | error | warning | information
+      "code" : "informational", // R!  Error or warning code
+      "details" : { 
+        "text": await ipfsNode.add(jsonPayload),
+        "coding": [{
+          "system": "http://terminology.hl7.org/CodeSystem/operation-outcome",
+          "code": "MSG_UPDATED",
+          "display": "existing resource updated",
+          "userSelected": false
+        }]
+      }
+    }]
+  }
+  return operationOutcome;
+}
+async function listIpfsRecords(req){
+  let chunks = [];
+  for await (const chunk of ipfsNode.cat(get(req, 'query.cis'))) {
+    chunks.push(chunk);
+  }
+  return toString(Uint8Array.from(concat(chunks)));
+}
+
 //==========================================================================================
 // Route Manifest  
 
@@ -391,7 +439,74 @@ if(typeof serverRouteManifest === "object"){
 
               console.log(collectionName + " records: " + Collections[collectionName].find().count());
               
-              if(["ndjson", "application/ndjson", "application/fhir+ndjson"].includes(get(req, 'query._outputFormat'))){
+              if(["json", "application/json", "application/fhir+json", "bundle", "Bundle"].includes(get(req, 'query._outputFormat'))){
+                let jsonPayload = [];
+
+                Collections[collectionName].find().forEach(function(record){
+                  jsonPayload.push({
+                    fullUrl: routeResourceType + '/' + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record)
+                  });
+                });
+  
+                process.env.DEBUG && console.log('jsonPayload', jsonPayload);
+
+                res.setHeader('Content-disposition', 'attachment; filename=' + collectionName + ".fhir");
+                res.setHeader("x-provenance", signProvenance(jsonPayload));
+
+                // Success
+                JsonRoutes.sendResult(res, {
+                  code: 200,
+                  data: Bundle.generate(jsonPayload)
+                });
+                
+                
+              } else if(["ipfs"].includes(get(req, 'query._outputFormat'))){
+                let jsonPayload = [];
+
+                Collections[collectionName].find().forEach(function(record){
+                  jsonPayload.push(RestHelpers.prepForFhirTransfer(record));
+                });
+  
+                jsonPayload.push(signProvenance(jsonPayload));
+
+                process.env.DEBUG && console.log('jsonPayload', jsonPayload);
+
+                if(process.env.ENABLE_IPFS){
+
+                  if(get(req, 'query.cis')){                    
+                    // Success
+                    JsonRoutes.sendResult(res, {
+                      code: 200,
+                      data: listIpfsRecords(req)
+                    });
+                  } else {
+                    // Success
+                    JsonRoutes.sendResult(res, {
+                      code: 200,
+                      data: exportToIpfsNode()
+                    });
+
+                  }
+
+
+                } else {
+                  JsonRoutes.sendResult(res, {
+                    code: 501,
+                    data: {
+                      "resourceType": "OperationOutcome",
+                      "issue" : [{ // R!  A single issue associated with the action
+                        "severity" : "error", // R!  fatal | error | warning | information
+                        "code" : "please set ENABLE_IPFS=true to enable this functionality", // R!  Error or warning code                        
+                      }]
+                    }
+                  });
+                }
+
+                
+                
+              // if(["ndjson", "application/ndjson", "application/fhir+ndjson"].includes(get(req, 'query._outputFormat'))){
+              } else {
                 let ndJsonPayload = "[";
 
                 res.setHeader("content-type", 'application/ndjson');
@@ -404,23 +519,6 @@ if(typeof serverRouteManifest === "object"){
                 // Success
                 JsonRoutes.sendResult(res, {
                   code: 202
-                });
-              } else {
-                let jsonPayload = [];
-
-                Collections[collectionName].find().forEach(function(record){
-                  jsonPayload.push(RestHelpers.prepForFhirTransfer(record));
-                });
-  
-                process.env.DEBUG && console.log('jsonPayload', jsonPayload);
-
-                res.setHeader('Content-disposition', 'attachment; filename=' + collectionName + ".fhir");
-                res.setHeader("x-provenance", signProvenance(jsonPayload));
-
-                // Success
-                JsonRoutes.sendResult(res, {
-                  code: 200,
-                  data: Bundle.generate(jsonPayload)
                 });
               }
             } else {
@@ -538,14 +636,65 @@ if(typeof serverRouteManifest === "object"){
           }
         });
         
+        
         // search-type
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('>> GET ' + fhirPath + "/" + routeResourceType, req.query); }
 
+          // if(get(Meteor, 'settings.private.debug') === true) { 
+          //   console.log('Resource Type: ' + routeResourceType); 
+            
+          //   let databaseQuery = {};
+          //   SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
+          //     console.log('------------------------------------------------------')
+          //     console.log('SearchParameter.id', get(searchParameter, 'id'));
+          //     console.log('Url.parameter', get(searchParameter, 'code'));
+          //     console.log('Mongo.expression', get(searchParameter, 'expression'));
+
+          //     Object.keys(req.query).forEach(function(queryKey){
+          //       if(get(searchParameter, 'code') === queryKey){
+          //         Object.assign(databaseQuery, fhirPathToMongo(searchParameter, req))
+          //       }
+          //     })
+
+          //     let mongoQuery = fhirPathToMongo(searchParameter, req);
+          //     console.log('Mongo.query', JSON.stringify(mongoQuery));
+              
+          //   })           
+          // }
+
+          // let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
+          let mongoQuery = {};
+          if(get(Meteor, 'settings.private.debug') === true) { 
+            console.log('Resource Type: ' + routeResourceType);               
+          }
+
+          SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
+            console.log('------------------------------------------------------')
+            console.log('req.query', req.query);
+            console.log('SearchParameter.id', get(searchParameter, 'id'));
+            console.log('Url.parameter', get(searchParameter, 'code'));
+            console.log('Mongo.expression', get(searchParameter, 'expression'));
+
+
+            Object.keys(req.query).forEach(function(queryKey){              
+              if(Object.hasOwnProperty(queryKey) && (Object[queryKey] === "")){
+                let fieldExistsQuery = {};
+                fieldExistsQuery[queryKey] = {$exists: true};
+                Object.assign(mongoQuery, fieldExistsQuery);
+              } else if(get(searchParameter, 'code') === queryKey){
+                Object.assign(mongoQuery, fhirPathToMongo(searchParameter, req))
+              }                
+            })       
+            
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('mongoQuery', JSON.stringify(mongoQuery)); }
+          }) 
+
+
           preParse(req);
 
-          console.log('req.originalUrl', req.originalUrl)
+          console.log('Original Url:  ' + req.originalUrl)
 
           // res.setHeader("Access-Control-Allow-Origin", "*");          
           // res.setHeader("Access-Control-Allow-Origin", "*");
@@ -557,20 +706,20 @@ if(typeof serverRouteManifest === "object"){
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
-            let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('Generated the following query for the ' + routeResourceType + ' collection.', databaseQuery); }
+            //let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
+            // if(get(Meteor, 'settings.private.debug') === true) { console.log('Generated the following query for the ' + routeResourceType + ' collection.', databaseQuery); }
 
             let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName]', collectionName); }
-            if(get(Meteor, 'settings.private.trace') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
+            // if(get(Meteor, 'settings.private.trace') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
 
             let payload = [];
 
             if(Collections[collectionName]){
 
-              let totalMatches = Collections[collectionName].find(databaseQuery).count();
-              let records = Collections[collectionName].find(databaseQuery, databaseOptions).fetch();
+              let totalMatches = Collections[collectionName].find(mongoQuery).count();
+              let records = Collections[collectionName].find(mongoQuery, databaseOptions).fetch();
               if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
 
 
@@ -1178,7 +1327,8 @@ if(typeof serverRouteManifest === "object"){
                     setObjectPatch[key] = get(req.body, key);
                   })
 
-                  console.log('setObjectPatch', setObjectPatch)
+                  
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('setObjectPatch', setObjectPatch); }
                   let result = Collections[collectionName].update({id: req.params.id}, {$set: setObjectPatch}, {multi: true});
 
                   // Unauthorized
@@ -1192,12 +1342,24 @@ if(typeof serverRouteManifest === "object"){
 
                   let currentRecord = Collections[collectionName].findOne({id: req.params.id});
 
-                  let patchedRecord = Object.assign(currentRecord, incomingRecord);
+                  delete currentRecord._document;
 
-                  console.log('patchedRecord', patchedRecord);
+                  // let patchedRecord = Object.assign(currentRecord, incomingRecord);                  
+
+                  let setObjectPatch = {};
+                  Object.keys(req.query).forEach(function(key){
+                    setObjectPatch[key] = get(req.body, key);
+                  })
+                  if(get(Meteor, 'settings.private.debug') === true) { console.log('setObjectPatch', setObjectPatch); }
+
                   
+                  Collections[collectionName].update({_id: setObjectPatch._id}, {$set: setObjectPatch});
+
+                  delete setObjectPatch._document;
+                  delete setObjectPatch._id;
+
                   JsonRoutes.sendResult(res, {
-                    data: patchedRecord,
+                    data: setObjectPatch,
                     code: 204
                   });
                 } else if (numRecordsToUpdate === 0){
@@ -1208,7 +1370,10 @@ if(typeof serverRouteManifest === "object"){
               } else {
                 console.log(collectionName + ' collection not found.')
                 JsonRoutes.sendResult(res, {
-                  code: 500
+                  code: 500,
+                  data: {
+                    message: collectionName + ' collection not found.'
+                  }
                 });
               }
             } else {
