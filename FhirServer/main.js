@@ -1,9 +1,8 @@
 // import '/imports/startup/server';
 // import '/imports/api/users/methods';
 
-const { exec } = require('child_process');
-const clock = require('world-clock')()
 
+import { exec } from 'child_process';
 import moment from 'moment-timezone';
 import { get } from 'lodash';
 import { DDPGracefulShutdown } from '@meteorjs/ddp-graceful-shutdown';
@@ -18,7 +17,6 @@ Meteor.startup(function(){
   console.log('');
   console.log('Clock check...');
   console.log('Current time zone: ' + moment.tz.guess());
-  console.log('Local system time: ' + clock.localDateTime('SYSTEM').toString());
   console.log('');
 
 

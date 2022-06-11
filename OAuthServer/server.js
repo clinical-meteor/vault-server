@@ -1,8 +1,8 @@
 
 
-let express = require('express');
-let bodyParser = require('body-parser');
-var OAuthServer = require('express-oauth-server');
+import express from 'express';
+import bodyParser from 'body-parser';
+import OAuthServer from 'express-oauth-server';
  
 
 var options = { 

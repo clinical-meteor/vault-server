@@ -21,13 +21,11 @@ import superagent from 'superagent';
 
 import fetch from 'node-fetch';
 
-// import asn from 'asn1.js';
-// import ASN1 from '@lapo/asn1js';
+import asn1js from 'asn1js';
+import pkijs from 'pkijs';
+import pvutils from 'pvutils';
 
-const asn1js = require("asn1js");
-const pkijs = require("pkijs");
-const pvutils = require('pvutils');
-const fs = require('fs');
+import fs from 'fs';
 
 import InboundChannel from '../lib/InboundRequests.schema.js';
 console.log('InboundChannel', InboundChannel)

@@ -1,4 +1,3 @@
-// let IPFS = require('ipfs-core');
 
 import * as IPFS from 'ipfs-core';
 import { AbortController } from "node-abort-controller";
