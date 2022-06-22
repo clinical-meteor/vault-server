@@ -19,8 +19,6 @@ import superagent from 'superagent';
 // import {exec} from 'openssl-wrapper';
 // const opensslAsync = Promise.promisify(exec);
 
-import fetch from 'node-fetch';
-
 import asn1js from 'asn1js';
 import pkijs from 'pkijs';
 import pvutils from 'pvutils';
