@@ -39,7 +39,7 @@ Package.onUse(function(api) {
     api.addFiles('FhirServer/main.js', 'server');
     api.addFiles('FhirServer/Core.js', 'server');
     api.addFiles('FhirServer/Metadata.js', 'server');
-    // api.addFiles('FhirServer/OAuth.js', 'server');
+    api.addFiles('FhirServer/OAuth.js', 'server');
 
     // // OAuth Server
     api.addFiles('OAuthServer/common.js', ['client', 'server']);
@@ -87,7 +87,7 @@ Npm.depends({
     // "oauth2-server": "3.1.1",
 
     // // https://www.npmjs.com/package/express-oauth-server
-    // "express-oauth-server": "2.0.0",
+    "express-oauth-server": "2.0.0",
 
     // // oauth2 client; redundant to fhirclient, but usefull
     // // https://www.npmjs.com/package/simple-oauth2
@@ -107,9 +107,9 @@ Npm.depends({
 
     // // x509 encoder / decoder
     // // "asn1.js": "5.4.1",
-    // "asn1js": "2.2.0",
-    // "pkijs": "2.2.2",
-    // "pvutils": "1.1.2",
+    "asn1js": "2.2.0",
+    "pkijs": "2.2.2",
+    "pvutils": "1.1.2",
 
     // // "openssl-wrapper": "0.3.4",
     // // "bluebird": "3.7.2"
