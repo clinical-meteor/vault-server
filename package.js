@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.4.7',
+    version: '8.4.8',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -22,7 +22,7 @@ Package.onUse(function(api) {
     api.use('meteorhacks:async@1.0.0', 'server');
 
     // IPFS
-    api.addFiles('IpfsServer/server.js', 'server');
+    // api.addFiles('IpfsServer/server.js', 'server');
 
     // database drivers, data cursors
     api.use('mongo');
@@ -50,8 +50,6 @@ Package.onUse(function(api) {
     // UDAP
     api.addAssets('certs/EMRDirectTestCA.crt', 'server');
     api.addAssets('certs/EMRDirectTestClientSubCA.crt', 'server');
-
-    
     
     // DDP autopublish 
     api.addFiles('lib/Collections.js');
@@ -108,7 +106,7 @@ Npm.depends({
     "passport-openidconnect": "0.1.1",
 
     // x509 encoder / decoder
-    "asn1.js": "5.4.1",
+    // "asn1.js": "5.4.1",
     "asn1js": "2.2.0",
     "pkijs": "2.2.2",
     "pvutils": "1.1.2",
