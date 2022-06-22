@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.4.10',
+    version: '8.4.11',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -42,10 +42,10 @@ Package.onUse(function(api) {
     // api.addFiles('FhirServer/OAuth.js', 'server');
 
     // // OAuth Server
-    // api.addFiles('OAuthServer/common.js', ['client', 'server']);
-    // api.addFiles('OAuthServer/meteor-model.js', 'server');
-    // api.addFiles('OAuthServer/server.js', 'server');
-    // api.addFiles('OAuthServer/client.js', 'client');
+    api.addFiles('OAuthServer/common.js', ['client', 'server']);
+    api.addFiles('OAuthServer/meteor-model.js', 'server');
+    api.addFiles('OAuthServer/server.js', 'server');
+    api.addFiles('OAuthServer/client.js', 'client');
 
     // UDAP
     api.addAssets('certs/EMRDirectTestCA.crt', 'server');
