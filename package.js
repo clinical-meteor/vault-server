@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.4.8',
+    version: '8.4.9',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -79,7 +79,7 @@ Npm.depends({
     "body-parser": "1.14.2",
 
     "moment-timezone": "0.5.34",
-    "world-clock": "1.4.0",
+    // "world-clock": "1.4.0",
     "@meteorjs/ddp-graceful-shutdown": "0.9.2",
 
     // oauth server using Express
@@ -99,11 +99,11 @@ Npm.depends({
 
     // oauth2 middleware for connecting to Asymmetrick FHIR server
     // https://www.npmjs.com/package/passport-oauth2
-    "passport-oauth2": "1.6.1",
+    // "passport-oauth2": "1.6.1",
 
     // openid middleware for connecting to Asymmetrick FHIR server
     // https://www.npmjs.com/package/passport-openidconnect
-    "passport-openidconnect": "0.1.1",
+    // "passport-openidconnect": "0.1.1",
 
     // x509 encoder / decoder
     // "asn1.js": "5.4.1",
@@ -111,8 +111,8 @@ Npm.depends({
     "pkijs": "2.2.2",
     "pvutils": "1.1.2",
 
-    "openssl-wrapper": "0.3.4",
-    "bluebird": "3.7.2"
+    // "openssl-wrapper": "0.3.4",
+    // "bluebird": "3.7.2"
 
     // "ipfs-http-client": "54.0.2",
     // "ipfs-core": "0.12.2",

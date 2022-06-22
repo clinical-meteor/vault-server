@@ -14,11 +14,6 @@ import axios from 'axios';
 import superagent from 'superagent';
 
 
-// // import {exec as openssl} from 'openssl-wrapper';
-// import Promise from 'bluebird';
-// import {exec} from 'openssl-wrapper';
-// const opensslAsync = Promise.promisify(exec);
-
 import asn1js from 'asn1js';
 import pkijs from 'pkijs';
 import pvutils from 'pvutils';
