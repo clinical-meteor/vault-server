@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.4.9',
+    version: '8.4.10',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -39,13 +39,13 @@ Package.onUse(function(api) {
     api.addFiles('FhirServer/main.js', 'server');
     api.addFiles('FhirServer/Core.js', 'server');
     api.addFiles('FhirServer/Metadata.js', 'server');
-    api.addFiles('FhirServer/OAuth.js', 'server');
+    // api.addFiles('FhirServer/OAuth.js', 'server');
 
-    // OAuth Server
-    api.addFiles('OAuthServer/common.js', ['client', 'server']);
-    api.addFiles('OAuthServer/meteor-model.js', 'server');
-    api.addFiles('OAuthServer/server.js', 'server');
-    api.addFiles('OAuthServer/client.js', 'client');
+    // // OAuth Server
+    // api.addFiles('OAuthServer/common.js', ['client', 'server']);
+    // api.addFiles('OAuthServer/meteor-model.js', 'server');
+    // api.addFiles('OAuthServer/server.js', 'server');
+    // api.addFiles('OAuthServer/client.js', 'client');
 
     // UDAP
     api.addAssets('certs/EMRDirectTestCA.crt', 'server');
@@ -58,9 +58,9 @@ Package.onUse(function(api) {
     api.addFiles('lib/OAuthClients.schema.js', ['client', 'server']);
     api.addFiles('lib/UdapCertificates.schema.js', ['client', 'server']);
 
-    api.export('OAuthClient');
-    api.export('OAuthClients');
-    api.export('OAuthClientSchema');
+    // api.export('OAuthClient');
+    // api.export('OAuthClients');
+    // api.export('OAuthClientSchema');
 
     api.export('UdapCertificate');
     api.export('UdapCertificates');
@@ -79,46 +79,46 @@ Npm.depends({
     "body-parser": "1.14.2",
 
     "moment-timezone": "0.5.34",
-    // "world-clock": "1.4.0",
+    // // "world-clock": "1.4.0",
     "@meteorjs/ddp-graceful-shutdown": "0.9.2",
 
-    // oauth server using Express
-    // https://www.npmjs.com/package/oauth2-server
-    "oauth2-server": "3.1.1",
+    // // oauth server using Express
+    // // https://www.npmjs.com/package/oauth2-server
+    // "oauth2-server": "3.1.1",
 
-    // https://www.npmjs.com/package/express-oauth-server
-    "express-oauth-server": "2.0.0",
+    // // https://www.npmjs.com/package/express-oauth-server
+    // "express-oauth-server": "2.0.0",
 
-    // oauth2 client; redundant to fhirclient, but usefull
-    // https://www.npmjs.com/package/simple-oauth2
-    "simple-oauth2": "4.3.0",
+    // // oauth2 client; redundant to fhirclient, but usefull
+    // // https://www.npmjs.com/package/simple-oauth2
+    // "simple-oauth2": "4.3.0",
 
-    // openid client
-    // https://www.npmjs.com/package/openid
-    "openid": "2.0.10",
+    // // openid client
+    // // https://www.npmjs.com/package/openid
+    // "openid": "2.0.10",
 
-    // oauth2 middleware for connecting to Asymmetrick FHIR server
-    // https://www.npmjs.com/package/passport-oauth2
-    // "passport-oauth2": "1.6.1",
+    // // oauth2 middleware for connecting to Asymmetrick FHIR server
+    // // https://www.npmjs.com/package/passport-oauth2
+    // // "passport-oauth2": "1.6.1",
 
-    // openid middleware for connecting to Asymmetrick FHIR server
-    // https://www.npmjs.com/package/passport-openidconnect
-    // "passport-openidconnect": "0.1.1",
+    // // openid middleware for connecting to Asymmetrick FHIR server
+    // // https://www.npmjs.com/package/passport-openidconnect
+    // // "passport-openidconnect": "0.1.1",
 
-    // x509 encoder / decoder
-    // "asn1.js": "5.4.1",
-    "asn1js": "2.2.0",
-    "pkijs": "2.2.2",
-    "pvutils": "1.1.2",
+    // // x509 encoder / decoder
+    // // "asn1.js": "5.4.1",
+    // "asn1js": "2.2.0",
+    // "pkijs": "2.2.2",
+    // "pvutils": "1.1.2",
 
-    // "openssl-wrapper": "0.3.4",
-    // "bluebird": "3.7.2"
+    // // "openssl-wrapper": "0.3.4",
+    // // "bluebird": "3.7.2"
 
-    // "ipfs-http-client": "54.0.2",
-    // "ipfs-core": "0.12.2",
-    // "it-all": "1.0.4",
-    // "uint8arrays": "3.0.0",
-    // "node-abort-controller": "3.0.1"
+    // // "ipfs-http-client": "54.0.2",
+    // // "ipfs-core": "0.12.2",
+    // // "it-all": "1.0.4",
+    // // "uint8arrays": "3.0.0",
+    // // "node-abort-controller": "3.0.1"
 });
 
 

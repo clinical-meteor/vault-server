@@ -65,10 +65,10 @@ import {
 
 // import { create } from 'ipfs-http-client';
 
-import * as IPFS from 'ipfs-core';
+// import * as IPFS from 'ipfs-core';
 // import { AbortController } from "node-abort-controller";
-import { concat } from 'uint8arrays/concat';
-import { toString } from 'uint8arrays/to-string';
+// import { concat } from 'uint8arrays/concat';
+// import { toString } from 'uint8arrays/to-string';
 
 
 let ipfsNode;

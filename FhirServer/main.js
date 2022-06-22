@@ -3,7 +3,7 @@
 
 
 import { exec } from 'child_process';
-import moment from 'moment-timezone';
+// import moment from 'moment-timezone';
 import { get } from 'lodash';
 import { DDPGracefulShutdown } from '@meteorjs/ddp-graceful-shutdown';
 import { Meteor } from 'meteor/meteor';
@@ -16,7 +16,7 @@ Meteor.startup(function(){
 
   console.log('');
   console.log('Clock check...');
-  console.log('Current time zone: ' + moment.tz.guess());
+  // console.log('Current time zone: ' + moment.tz.guess());
   console.log('');
 
 
