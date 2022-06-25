@@ -68,7 +68,7 @@ function parseQueryComponent(searchParameter, req, resourceType, expression){
     }
     
     if(isFuzzy){
-      queryComponent[trimmedExpression] = {$regex: get(req.query, get(searchParameter, 'code'))};                
+      queryComponent[trimmedExpression] = {$regex: get(req.query, get(searchParameter, 'code')), $options: '-i'};                
     } else {
       queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
     }
