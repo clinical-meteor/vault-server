@@ -164,7 +164,7 @@ const Server = {
       // required fields
       "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize"),
       "token_endpoint":  Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token") ,
-      "capabilities": "http://localhost:3000/",
+      "capabilities": [],
 
       // optional fields
       "scopes_supported": "",
@@ -177,6 +177,8 @@ const Server = {
       // custom fields
       "message": "smart config!"
     }
+
+    response.capabilities.push("http://localhost:3000/");
 
     return response;
   },
