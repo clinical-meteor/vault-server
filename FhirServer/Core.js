@@ -649,7 +649,7 @@ if(typeof serverRouteManifest === "object"){
             console.log('Resource Type: ' + routeResourceType);               
           }
 
-
+          // first scan the query for any chained queries
           process.env.DEBUG && console.log('--------------------------------------')
           process.env.DEBUG && console.log('Checking for chained queries (GET)....')
           process.env.DEBUG && console.log('req.query', req.query);
@@ -682,10 +682,14 @@ if(typeof serverRouteManifest === "object"){
                   let chainedQuery = {};
                   chainedQuery[chainedSearchParams.xpath] = req.query[key]
                   process.env.DEBUG && console.log('chainedQuery', chainedQuery)
+                  
+                  // map the ids of any records that are found into an array
                   chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
-                    return "Location/" + record.id;
+                    return capitalize(queryParts[0]) + "/" + record.id;
                   })
 
+                  // the create the JOIN equivalent by matching the chain reference 
+                  // to any of the ids included in the array
                   mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
                 }
               }
@@ -695,9 +699,7 @@ if(typeof serverRouteManifest === "object"){
           process.env.TRACE && console.log('chainedIds', chainedIds);
 
 
-          // let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
-          
-
+          // now search through the query for regular run-of-the-mill queries
           SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
             process.env.DEBUG && console.log('------------------------------------------------------')
             process.env.DEBUG && console.log('req.query', req.query);
@@ -707,11 +709,14 @@ if(typeof serverRouteManifest === "object"){
 
 
             Object.keys(req.query).forEach(function(queryKey){              
+              // for query keys that dont have a value
+              // just build a mongo query that searches if the key exists or not
               if(Object.hasOwnProperty(queryKey) && (Object[queryKey] === "")){
                 let fieldExistsQuery = {};
                 fieldExistsQuery[queryKey] = {$exists: true};
                 Object.assign(mongoQuery, fieldExistsQuery);
               } else if(get(searchParameter, 'code') === queryKey){
+                // otherwise, map the fhirpath to mongo
                 Object.assign(mongoQuery, fhirPathToMongo(searchParameter, req))
               }                
             })       
@@ -720,13 +725,12 @@ if(typeof serverRouteManifest === "object"){
           }) 
 
           process.env.DEBUG && console.log('mongoQuery', mongoQuery);
-
           process.env.TRACE && console.log('req', req);
+
           preParse(req);
 
           console.log('Original Url:  ' + req.originalUrl)
 
-          // res.setHeader("Access-Control-Allow-Origin", "*");          
           // res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -736,16 +740,13 @@ if(typeof serverRouteManifest === "object"){
 
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
 
-            //let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
-            // if(get(Meteor, 'settings.private.debug') === true) { console.log('Generated the following query for the ' + routeResourceType + ' collection.', databaseQuery); }
-
             let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName]', collectionName); }
-            // if(get(Meteor, 'settings.private.trace') === true) { console.log('Collections[collectionName].databaseQuery', databaseQuery); }
 
             let payload = [];
 
+            // time to use the generated mongo query and go fetch actual records
             if(Collections[collectionName]){
 
               let totalMatches = Collections[collectionName].find(mongoQuery).count();
@@ -756,38 +757,57 @@ if(typeof serverRouteManifest === "object"){
               // payload entries
               records.forEach(function(record){
                 let newEntry = {
-                  fullUrl: "Organization/" + get(record, 'id'),
+                  fullUrl: routeResourceType + "/" + get(record, 'id'),
                   resource: RestHelpers.prepForFhirTransfer(record),
                   search: {
                     mode: "match"
                   }
-
-                  // Touchstone
-                  // ERROR: bdl-3: 'entry.request mandatory for batch/transaction/history, otherwise prohibited' failed. Location: Bundle (line 1, col 2).
-
-                  // request: {
-                  //   method: "GET",
-                  //   url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
-                  // },
-                  // response: {
-                  //   status: "200"
-                  // }
                 }
-                // if(){
-                //   newEntry.request = {
-                //     method: "GET",
-                //     url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'
-                //   };
-                //   newEntry.response = {
-                //     status: "200"
-                //   };
-                // }
                 payload.push(newEntry);
+
+                // lets check for any _include references
+                console.log('req.query', req.query);
+                if(Array.isArray(req.query._include)){
+                  req.query._include.forEach(function(_includeRef){
+                    let includeParts = _includeRef.split(":");
+                    let referenceBase;
+                    if(includeParts.length === 2){
+                      referenceBase = includeParts[1];
+                    } else if (includeParts.length === 2){
+                      referenceBase = includeParts[0];
+                    }
+
+                    if(get(record, referenceBase + ".reference")){
+                      console.log("_include reference: ", get(record, referenceBase + ".reference"))
+
+                      let includeReferenceParts = (get(record, referenceBase + ".reference")).split("/");
+                      console.log('includeReferenceParts.length', includeReferenceParts.length);
+
+                      let pluralizedReferenceBase = FhirUtilities.pluralizeResourceName(capitalize(referenceBase));
+                      console.log('pluralizedReferenceBase', pluralizedReferenceBase);
+
+                      if(Collections[pluralizedReferenceBase]){
+                        if(includeReferenceParts.length = 2){
+                          let _includeReferenceRecord = Collections[pluralizedReferenceBase].findOne({id: includeReferenceParts[1]})
+                          if(_includeReferenceRecord){
+                            let newEntry = {
+                              fullUrl: get(record, referenceBase + ".reference"),
+                              resource: RestHelpers.prepForFhirTransfer(_includeReferenceRecord),
+                              search: {
+                                mode: "include"
+                              }
+                            }
+                            payload.push(newEntry);
+                          }
+                        }
+                      }
+                    }
+                  })
+                }
               });
 
-              if(get(Meteor, 'settings.private.trace') === true) { console.log('payload', payload); }
 
-              // pagination logic
+              // add some pagination logic
               let links = [];
               links.push({
                 "relation": "self",
@@ -800,6 +820,7 @@ if(typeof serverRouteManifest === "object"){
                   "url": fhirPath + "/" + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
                 });  
               }
+
               
               // Success
               JsonRoutes.sendResult(res, {
