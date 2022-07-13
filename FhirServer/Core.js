@@ -2,7 +2,7 @@
 import RestHelpers from './RestHelpers';
 import fhirPathToMongo from './FhirPath';
 
-import { get, has, set, unset, cloneDeep, pullAt, findIndex } from 'lodash';
+import { get, has, set, unset, cloneDeep, capitalize, findIndex, countBy } from 'lodash';
 import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
@@ -206,7 +206,10 @@ function parseUserAuthorization(req){
   return isAuthorized;
 }
 
-function preParse(request){
+
+  function preParse(request){
+  process.env.DEBUG && console.log('request.query', request.query)
+  process.env.DEBUG && console.log('request.params', request.params)
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
@@ -216,7 +219,7 @@ function preParse(request){
         method: get(request, 'method'),
         url: get(request, 'url'),
         body: get(request, 'body'),
-        query: get(request, 'query'),
+        originalUrl: get(request, 'originalUrl'),
         headers: get(request, 'headers')
       });
     }
@@ -637,45 +640,70 @@ if(typeof serverRouteManifest === "object"){
         });
         
         
-        // search-type
+        // Search Interaction
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('>> GET ' + fhirPath + "/" + routeResourceType, req.query); }
 
-          // if(get(Meteor, 'settings.private.debug') === true) { 
-          //   console.log('Resource Type: ' + routeResourceType); 
-            
-          //   let databaseQuery = {};
-          //   SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
-          //     console.log('------------------------------------------------------')
-          //     console.log('SearchParameter.id', get(searchParameter, 'id'));
-          //     console.log('Url.parameter', get(searchParameter, 'code'));
-          //     console.log('Mongo.expression', get(searchParameter, 'expression'));
-
-          //     Object.keys(req.query).forEach(function(queryKey){
-          //       if(get(searchParameter, 'code') === queryKey){
-          //         Object.assign(databaseQuery, fhirPathToMongo(searchParameter, req))
-          //       }
-          //     })
-
-          //     let mongoQuery = fhirPathToMongo(searchParameter, req);
-          //     console.log('Mongo.query', JSON.stringify(mongoQuery));
-              
-          //   })           
-          // }
-
-          // let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
-          let mongoQuery = {};
           if(get(Meteor, 'settings.private.debug') === true) { 
             console.log('Resource Type: ' + routeResourceType);               
           }
 
+
+          process.env.DEBUG && console.log('--------------------------------------')
+          process.env.DEBUG && console.log('Checking for chained queries (GET)....')
+          process.env.DEBUG && console.log('req.query', req.query);
+
+          let mongoQuery = {};
+          let chainedIds;
+
+          Object.keys(req.query).forEach(function(key){
+            let queryParts = key.split(".");
+            if(Array.isArray(queryParts)){
+              let isChained = false;
+              process.env.DEBUG && console.log("queryParts.length", queryParts.length);
+              if(queryParts.length === 2){
+                isChained = true;
+                let newQueryUrl = "";
+                // console.log('queryParts[0]', queryParts[0])
+                let chainedCollectionName = FhirUtilities.pluralizeResourceName(capitalize(queryParts[0]))
+                newQueryUrl = chainedCollectionName + "?" + queryParts[1] + "=" + req.query[key]
+                process.env.DEBUG && console.log('newQueryUrl', newQueryUrl);
+
+                // look up search parameter for chained query
+                let chainedSearchParams = SearchParameters.findOne({code: queryParts[1]});
+                if(chainedSearchParams){
+                  process.env.DEBUG && console.log('chainedSearchParams.expression', chainedSearchParams.expression)
+                  process.env.DEBUG && console.log('chainedSearchParams.xpath', chainedSearchParams.xpath)
+                  process.env.DEBUG && console.log('chainedCollectionName', chainedCollectionName)
+                }
+
+                if(Collections[chainedCollectionName]){
+                  let chainedQuery = {};
+                  chainedQuery[chainedSearchParams.xpath] = req.query[key]
+                  process.env.DEBUG && console.log('chainedQuery', chainedQuery)
+                  chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
+                    return "Location/" + record.id;
+                  })
+
+                  mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
+                }
+              }
+            }
+          })
+
+          process.env.TRACE && console.log('chainedIds', chainedIds);
+
+
+          // let databaseQuery = RestHelpers.generateMongoSearchQuery(req.query, routeResourceType);
+          
+
           SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
-            console.log('------------------------------------------------------')
-            console.log('req.query', req.query);
-            console.log('SearchParameter.id', get(searchParameter, 'id'));
-            console.log('Url.parameter', get(searchParameter, 'code'));
-            console.log('Mongo.expression', get(searchParameter, 'expression'));
+            process.env.DEBUG && console.log('------------------------------------------------------')
+            process.env.DEBUG && console.log('req.query', req.query);
+            process.env.DEBUG && console.log('SearchParameter.id', get(searchParameter, 'id'));
+            process.env.DEBUG && console.log('Url.parameter', get(searchParameter, 'code'));
+            process.env.DEBUG && console.log('Mongo.expression', get(searchParameter, 'expression'));
 
 
             Object.keys(req.query).forEach(function(queryKey){              
@@ -691,7 +719,9 @@ if(typeof serverRouteManifest === "object"){
             if(get(Meteor, 'settings.private.debug') === true) { console.log('mongoQuery', JSON.stringify(mongoQuery)); }
           }) 
 
+          process.env.DEBUG && console.log('mongoQuery', mongoQuery);
 
+          process.env.TRACE && console.log('req', req);
           preParse(req);
 
           console.log('Original Url:  ' + req.originalUrl)
@@ -816,6 +846,7 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
   
+          process.env.TRACE && console.log('req', req);
           preParse(req);
 
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
@@ -881,7 +912,9 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType); }
 
+          process.env.TRACE && console.log('req', req);
           preParse(req);
+          
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);          
@@ -1005,7 +1038,9 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
+          process.env.TRACE && console.log('req', req);
           preParse(req);
+          
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1281,7 +1316,9 @@ if(typeof serverRouteManifest === "object"){
           process.env.DEBUG && console.log('================================================================'); 
           process.env.DEBUG && console.log('PATCH /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); 
         
+          process.env.TRACE && console.log('req', req);
           preParse(req);
+          
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1408,7 +1445,9 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('DELETE /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
 
+          process.env.TRACE && console.log('req', req);
           preParse(req);
+          
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1472,7 +1511,24 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('================================================================'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)); }
 
+          
           preParse(req);
+
+          console.log('---------------------------------------')
+          console.log('Checking for chained queries (POST)....')
+          console.log('req.query', req.query);
+          Object.keys(req.query).forEach(function(key){
+            let result = 0;
+            let queryParts = key.split(".");
+            if(Array.isArray(queryParts)){
+              result = queryParts.length;
+              if(queryParts.length === 2){
+                
+              }
+            }
+
+            return result;
+          })
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1634,13 +1690,32 @@ if(typeof serverRouteManifest === "object"){
           // }
         });
 
-        // search Interaction
+        // Search Interaction
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + ":param", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('-----------------------------------------------------------------------------'); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('??? GET /' + fhirPath + '/' + routeResourceType + '?' + JSON.stringify(req.query)); }
           if(get(Meteor, 'settings.private.debug') === true) { console.log('params', req.params); }
 
+
           preParse(req);
+          
+          console.log('--------------------------------------')
+          console.log('Checking for chained queries (GET)....')
+          console.log('req.query', req.query);
+          Object.keys(req.query).forEach(function(key){
+            let result = 0;
+            let queryParts = key.split(".");
+            if(Array.isArray(queryParts)){
+              result = queryParts.length;
+              if(queryParts.length === 2){
+                
+              }
+            }
+
+            return result;
+          })
+
+          
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           
