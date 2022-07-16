@@ -57,7 +57,8 @@ function parseQueryComponent(searchParameter, req, resourceType, expression){
   let queryComponent = {};
 
   if(!expression.includes('extension')){
-    let trimmedExpression = (expression.replace(resourceType + ".", "")).trim();
+    // let trimmedExpression = (expression.replace(resourceType + ".", "")).trim();
+    let trimmedExpression = get(searchParameter, 'xpath');
 
     let isFuzzy = false;
     if(Array.isArray(searchParameter.modifier)){
@@ -71,11 +72,7 @@ function parseQueryComponent(searchParameter, req, resourceType, expression){
     if(isFuzzy){
       queryComponent[trimmedExpression] = {$regex: get(req.query, get(searchParameter, 'code')), $options: '-i'};                
     } else {
-      if(get(searchParameter, 'xpath')){
-        queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'xpath'));
-      } else {
-        queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
-      }
+      queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
     }
   }
 
@@ -88,9 +85,9 @@ export function fhirPathToMongo(searchParameter, queryKey, req){
     if(typeof searchParameter === "object"){
       let resourceType = get(searchParameter, 'base.0');
 
-      if(get(searchParameter, 'xpath')){        
-        mongoQueryObj[get(searchParameter, 'xpath')] = req.query[queryKey];
-      } else {
+      // if(get(searchParameter, 'xpath')){        
+      //   mongoQueryObj[get(searchParameter, 'xpath')] = req.query[queryKey];
+      // } else {
         let expresionString = get(searchParameter, 'expression');
         let expressionArray = expresionString.split('|');
 
@@ -106,7 +103,7 @@ export function fhirPathToMongo(searchParameter, queryKey, req){
             mongoQueryObj = {$or: componentArray }
           }
         }
-      }      
+      // }      
     }
 
     if(process.env.DEBUG){
