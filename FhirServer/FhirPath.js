@@ -1,5 +1,6 @@
 import { get, has, set, unset, cloneDeep, pullAt, findIndex } from 'lodash';
 
+import * as mongoQuery from 'mongo-query';
 
 import { 
     AllergyIntoleranceSchema,
@@ -70,35 +71,48 @@ function parseQueryComponent(searchParameter, req, resourceType, expression){
     if(isFuzzy){
       queryComponent[trimmedExpression] = {$regex: get(req.query, get(searchParameter, 'code')), $options: '-i'};                
     } else {
-      queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
+      if(get(searchParameter, 'xpath')){
+        queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'xpath'));
+      } else {
+        queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
+      }
     }
   }
 
   return queryComponent;
 }
 
-export function fhirPathToMongo(searchParameter, req){
-    let mongoQuery = {};
+export function fhirPathToMongo(searchParameter, queryKey, req){
+    let mongoQueryObj = {};
   
     if(typeof searchParameter === "object"){
       let resourceType = get(searchParameter, 'base.0');
-      let expresionString = get(searchParameter, 'expression');
-      let expressionArray = expresionString.split('|');
 
-      if(Array.isArray(expressionArray)){
-        if(expressionArray.length === 1){
-          mongoQuery = parseQueryComponent(searchParameter, req, resourceType, expresionString);
-        } else if (expressionArray.length > 1){
-          
-          let componentArray = [];
-          expressionArray.forEach(function(expression){
-            componentArray.push(parseQueryComponent(searchParameter, req, resourceType, expression));
-          })
-          mongoQuery = {$or: componentArray }
+      if(get(searchParameter, 'xpath')){        
+        mongoQueryObj[get(searchParameter, 'xpath')] = req.query[queryKey];
+      } else {
+        let expresionString = get(searchParameter, 'expression');
+        let expressionArray = expresionString.split('|');
+
+        if(Array.isArray(expressionArray)){
+          if(expressionArray.length === 1){
+            mongoQueryObj = parseQueryComponent(searchParameter, req, resourceType, expresionString);
+          } else if (expressionArray.length > 1){
+            
+            let componentArray = [];
+            expressionArray.forEach(function(expression){
+              componentArray.push(parseQueryComponent(searchParameter, req, resourceType, expression));
+            })
+            mongoQueryObj = {$or: componentArray }
+          }
         }
-      }
+      }      
     }
-    return mongoQuery;
+
+    if(process.env.DEBUG){
+      console.log('mongoQueryObj', mongoQueryObj)
+    }
+    return mongoQueryObj;
   }
 
   export default fhirPathToMongo;

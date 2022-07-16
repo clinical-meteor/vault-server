@@ -2,6 +2,8 @@
 import RestHelpers from './RestHelpers';
 import fhirPathToMongo from './FhirPath';
 
+
+
 import { get, has, set, unset, cloneDeep, capitalize, findIndex, countBy } from 'lodash';
 import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
@@ -208,8 +210,8 @@ function parseUserAuthorization(req){
 
 
   function preParse(request){
-  process.env.DEBUG && console.log('request.query', request.query)
-  process.env.DEBUG && console.log('request.params', request.params)
+  process.env.TRACE && console.log('request.query', request.query)
+  process.env.TRACE && console.log('request.params', request.params)
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
@@ -435,8 +437,8 @@ if(typeof serverRouteManifest === "object"){
             let lastModified = moment().subtract(100, 'years');
             let hasVersionedLastModified = false;
 
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
+            process.env.DEBUG && console.log('req.query', req.query)
+            process.env.DEBUG && console.log('req.params', req.params)
 
             if(req.params.id === "$export"){
 
@@ -661,7 +663,7 @@ if(typeof serverRouteManifest === "object"){
             let queryParts = key.split(".");
             if(Array.isArray(queryParts)){
               let isChained = false;
-              process.env.DEBUG && console.log("queryParts.length", queryParts.length);
+              process.env.TRACE && console.log("queryParts.length", queryParts.length);
               if(queryParts.length === 2){
                 isChained = true;
                 let newQueryUrl = "";
@@ -702,11 +704,15 @@ if(typeof serverRouteManifest === "object"){
           // now search through the query for regular run-of-the-mill queries
           SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
             process.env.DEBUG && console.log('------------------------------------------------------')
-            process.env.DEBUG && console.log('req.query', req.query);
-            process.env.DEBUG && console.log('SearchParameter.id', get(searchParameter, 'id'));
-            process.env.DEBUG && console.log('Url.parameter', get(searchParameter, 'code'));
-            process.env.DEBUG && console.log('Mongo.expression', get(searchParameter, 'expression'));
-
+            // process.env.DEBUG && console.log('req.query', req.query);
+            process.env.DEBUG && console.log('SearchParameter');
+            process.env.DEBUG && console.log('id:         ' + get(searchParameter, 'id'));
+            process.env.DEBUG && console.log('code:       ' + get(searchParameter, 'code'));
+            process.env.DEBUG && console.log('expression: ' + get(searchParameter, 'expression'));
+            process.env.DEBUG && console.log('base        ' + get(searchParameter, 'base'));
+            process.env.DEBUG && console.log('target      ' + get(searchParameter, 'target[0]'));
+            process.env.DEBUG && console.log('xpath:      ' + get(searchParameter, 'xpath'));
+            process.env.DEBUG && console.log(' ');
 
             Object.keys(req.query).forEach(function(queryKey){              
               // for query keys that dont have a value
@@ -717,19 +723,20 @@ if(typeof serverRouteManifest === "object"){
                 Object.assign(mongoQuery, fieldExistsQuery);
               } else if(get(searchParameter, 'code') === queryKey){
                 // otherwise, map the fhirpath to mongo
-                Object.assign(mongoQuery, fhirPathToMongo(searchParameter, req))
+                Object.assign(mongoQuery, fhirPathToMongo(searchParameter, queryKey, req))
               }                
             })       
             
             if(get(Meteor, 'settings.private.debug') === true) { console.log('mongoQuery', JSON.stringify(mongoQuery)); }
           }) 
 
-          process.env.DEBUG && console.log('mongoQuery', mongoQuery);
+          process.env.DEBUG && console.log('Original Url:  ' + req.originalUrl)
+          process.env.DEBUG && console.log('Generated Mongo query: ', mongoQuery);
           process.env.TRACE && console.log('req', req);
+
 
           preParse(req);
 
-          console.log('Original Url:  ' + req.originalUrl)
 
           // res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -742,7 +749,7 @@ if(typeof serverRouteManifest === "object"){
 
             let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('Collections[collectionName]', collectionName); }
+            if(get(Meteor, 'settings.private.debug') === true) { console.log('CollectionName: ' + collectionName); }
 
             let payload = [];
 
@@ -751,8 +758,8 @@ if(typeof serverRouteManifest === "object"){
 
               let totalMatches = Collections[collectionName].find(mongoQuery).count();
               let records = Collections[collectionName].find(mongoQuery, databaseOptions).fetch();
-              if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
-
+              // if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
+              process.env.DEBUG && console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); 
 
               // payload entries
               records.forEach(function(record){
@@ -766,7 +773,7 @@ if(typeof serverRouteManifest === "object"){
                 payload.push(newEntry);
 
                 // lets check for any _include references
-                console.log('req.query', req.query);
+                // process.env.DEBUG && console.log('req.query', req.query);
                 if(Array.isArray(req.query._include)){
                   req.query._include.forEach(function(_includeRef){
                     let includeParts = _includeRef.split(":");
@@ -860,7 +867,7 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
-      // history-instance
+      // History-instance
       // https://www.hl7.org/fhir/http.html#history-instance
       if(serverRouteManifest[routeResourceType].interactions.includes('history-instance')){
         // history-instance
@@ -881,8 +888,8 @@ if(typeof serverRouteManifest === "object"){
             let lastModified = moment().subtract(100, 'years');
             let hasVersionedLastModified = false;
 
-            console.log('req.query', req.query)
-            console.log('req.params', req.params)
+            process.env.DEBUG && console.log('req.query', req.query)
+            process.env.DEBUG && console.log('req.params', req.params)
 
             let records = Collections[collectionName].find({id: req.params.id});
             if(get(Meteor, 'settings.private.trace') === true) { console.log('records', records); }
@@ -926,7 +933,7 @@ if(typeof serverRouteManifest === "object"){
         });        
       }
 
-      // update-create 
+      // Update-create 
       // https://www.hl7.org/fhir/http.html#create
       if(serverRouteManifest[routeResourceType].interactions.includes('create')){
         JsonRoutes.add("post", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
@@ -1052,7 +1059,7 @@ if(typeof serverRouteManifest === "object"){
         });
       }
 
-      // update 
+      // Update 
       // https://www.hl7.org/fhir/http.html#update
       if(serverRouteManifest[routeResourceType].interactions.includes('update')){
         JsonRoutes.add("put", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
@@ -1535,9 +1542,10 @@ if(typeof serverRouteManifest === "object"){
           
           preParse(req);
 
-          console.log('---------------------------------------')
-          console.log('Checking for chained queries (POST)....')
-          console.log('req.query', req.query);
+          process.env.DEBUG && console.log('---------------------------------------')
+          process.env.DEBUG && console.log('Checking for chained queries (POST)....')
+          process.env.DEBUG && console.log('req.query', req.query);
+
           Object.keys(req.query).forEach(function(key){
             let result = 0;
             let queryParts = key.split(".");
@@ -1720,9 +1728,9 @@ if(typeof serverRouteManifest === "object"){
 
           preParse(req);
           
-          console.log('--------------------------------------')
-          console.log('Checking for chained queries (GET)....')
-          console.log('req.query', req.query);
+          process.env.DEBUG && console.log('--------------------------------------')
+          process.env.DEBUG && console.log('Checking for chained queries (GET)....')
+          process.env.DEBUG && console.log('req.query', req.query);
           Object.keys(req.query).forEach(function(key){
             let result = 0;
             let queryParts = key.split(".");

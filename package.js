@@ -78,6 +78,8 @@ Npm.depends({
     "express": "4.13.4",
     "body-parser": "1.14.2",
 
+    "mongo-query": "0.5.7",
+
     "moment-timezone": "0.5.34",
     // // "world-clock": "1.4.0",
     "@meteorjs/ddp-graceful-shutdown": "0.9.2",
