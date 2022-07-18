@@ -14,6 +14,8 @@ import InboundChannel from '../lib/InboundRequests.schema.js';
 import jwt from 'jsonwebtoken';
 import forge from 'node-forge';
 
+import base64url from 'base64-url';
+
 import { 
   AllergyIntolerances,
   AuditEvents,
@@ -65,6 +67,9 @@ import {
   FhirUtilities
 } from 'meteor/clinical:hl7-fhir-data-infrastructure';
 
+import OAuthClientComponents from '../lib/OAuthClients.schema.js';
+// console.log("&&&&&&&&&&", OAuthClientComponents.OAuthClients)
+
 // import { create } from 'ipfs-http-client';
 
 // import * as IPFS from 'ipfs-core';
@@ -72,6 +77,15 @@ import {
 // import { concat } from 'uint8arrays/concat';
 // import { toString } from 'uint8arrays/to-string';
 
+let defaultQuery = {};
+let defaultOptions = {
+    limit: get(Meteor, 'settings.private.fhir.publicationLimit', 1000)
+}
+if(get(Meteor, 'settings.private.enableAccessRestrictions')){
+  defaultOptions.fields = {
+      address: 0
+  };
+}
 
 let ipfsNode;
 if(process.env.ENABLE_IPFS){
@@ -82,7 +96,7 @@ if(process.env.ENABLE_IPFS){
   // ipfsNode = create();
 
   // console.log('ipfs.getEndpointConfig', ipfsNode.getEndpointConfig())
-}
+} 
 
 //==========================================================================================
 // Collections Namespace  
@@ -121,6 +135,7 @@ if(Meteor.isServer){
   Collections.Observations = Observations;
   Collections.Organizations = Organizations;
   Collections.OrganizationAffiliations = OrganizationAffiliations;
+  Collections.OAuthClients = OAuthClientComponents.OAuthClients;
   Collections.Medications = Medications;
   Collections.MedicationOrders = MedicationOrders;
   Collections.Measures = Measures;
@@ -178,9 +193,33 @@ if(typeof OAuthServerConfig === 'object'){
 //==========================================================================================
 // Helper Methods
 
+
 function parseUserAuthorization(req){
+  process.env.DEBUG && console.log("Parsing user authorization....", OAuthClients)
   let isAuthorized = false;
 
+  // BASIC AUTH
+  if(get(Meteor, 'settings.private.enableBasicAuth')){
+    if(get(req, "headers.authorization")){
+      let encodedAuth = get(req, "headers.authorization");
+      let decodedAuth = base64url.decode(encodedAuth.replace("Basic ", ""))
+      console.log('decodedAuth: ' + decodedAuth)
+  
+      let authParts = decodedAuth.split(":");
+      if(authParts[0] && Collections["OAuthClients"]){
+        let clientRegistration = Collections["OAuthClients"].findOne({client_id: authParts[0]})
+        if(clientRegistration && authParts[1]){
+          if(get(clientRegistration, 'client_secret') === authParts[1]){
+            isAuthorized = true;
+          }
+        }
+      } else {
+        console.log("For some reason the OAuthClients collection doesn't exist.")
+      }
+    }  
+  }
+
+  // SMART on FHIR
   let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
   if(typeof OAuthServerConfig === 'object'){
     let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
@@ -205,13 +244,17 @@ function parseUserAuthorization(req){
     }
   }
 
+
+  // UDAP
+
   return isAuthorized;
 }
 
 
-  function preParse(request){
-  process.env.TRACE && console.log('request.query', request.query)
-  process.env.TRACE && console.log('request.params', request.params)
+function preParse(request){
+  process.env.DEBUG && console.log('request.query', request.query)
+  process.env.DEBUG && console.log('request.params', request.params)
+  process.env.DEBUG && console.log('request.headers', request.headers)
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
@@ -447,7 +490,7 @@ if(typeof serverRouteManifest === "object"){
               if(["json", "application/json", "application/fhir+json", "bundle", "Bundle"].includes(get(req, 'query._outputFormat'))){
                 let jsonPayload = [];
 
-                Collections[collectionName].find().forEach(function(record){
+                Collections[collectionName].find(defaultQuery, defaultOptions).forEach(function(record){
                   jsonPayload.push({
                     fullUrl: routeResourceType + '/' + get(record, 'id'),
                     resource: RestHelpers.prepForFhirTransfer(record)
@@ -469,7 +512,7 @@ if(typeof serverRouteManifest === "object"){
               } else if(["ipfs"].includes(get(req, 'query._outputFormat'))){
                 let jsonPayload = [];
 
-                Collections[collectionName].find().forEach(function(record){
+                Collections[collectionName].find(defaultQuery, defaultOptions).forEach(function(record){
                   jsonPayload.push(RestHelpers.prepForFhirTransfer(record));
                 });
   
@@ -530,7 +573,7 @@ if(typeof serverRouteManifest === "object"){
 
               // not exporting; just a regular read
 
-              records = Collections[collectionName].find({id: req.params.id}).fetch();
+              records = Collections[collectionName].find({id: req.params.id}, defaultOptions).fetch();
 
               // plain ol regular approach
               if(get(Meteor, 'settings.private.debug') === true) { console.log('records', records); }

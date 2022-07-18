@@ -589,6 +589,12 @@ export const RestHelpers = {
         databaseOptions.skip = parseInt(get(query, '_skip'))
       }
 
+      if(get(Meteor, 'settings.private.enableAccessRestrictions')){
+        databaseOptions.fields = {
+            address: 0
+        };
+      }
+
       console.log('generateMongoSearchOptions().databaseOptions', databaseOptions);
       return databaseOptions;
     }

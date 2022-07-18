@@ -1295,7 +1295,7 @@ Meteor.startup(function() {
               JsonRoutes.sendResult(res, {
                 code: 406,
                 data: {
-                  "error_message": 'No redirects registered with client...'
+                  "error_message": 'No redirect_uris registered with client....'
                 }  
               });
             }
