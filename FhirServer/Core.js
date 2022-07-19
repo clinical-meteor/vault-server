@@ -195,7 +195,7 @@ if(typeof OAuthServerConfig === 'object'){
 
 
 function parseUserAuthorization(req){
-  process.env.DEBUG && console.log("Parsing user authorization....", OAuthClients)
+  process.env.DEBUG && console.log("Parsing user authorization....")
   let isAuthorized = false;
 
   // BASIC AUTH
