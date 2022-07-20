@@ -21,7 +21,6 @@ import pvutils from 'pvutils';
 import fs from 'fs';
 
 import InboundChannel from '../lib/InboundRequests.schema.js';
-console.log('InboundChannel', InboundChannel)
 
 // import Hex from '@lapo/asn1js/hex';
 // import format from 'ecdsa-sig-formatter';
