@@ -72,7 +72,18 @@ function parseQueryComponent(searchParameter, req, resourceType, expression){
     if(isFuzzy){
       queryComponent[trimmedExpression] = {$regex: get(req.query, get(searchParameter, 'code')), $options: '-i'};                
     } else {
-      queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
+      // queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
+      
+      let codeComponents = (get(req.query, get(searchParameter, 'code'))).split(",");
+      if(Array.isArray(codeComponents) && (codeComponents.length > 1)){
+        queryComponent[trimmedExpression] = {$in: []};
+        codeComponents.forEach(function(part){
+          queryComponent[trimmedExpression].$in.push(part);
+        });
+      } else {
+        queryComponent[trimmedExpression] = get(req.query, get(searchParameter, 'code'));
+      }
+
     }
   }
 

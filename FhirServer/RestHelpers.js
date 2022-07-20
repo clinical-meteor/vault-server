@@ -430,8 +430,7 @@ export const RestHelpers = {
           };  
         }
       }
-
-     
+  
       if (get(query, 'name')) {
         databaseQuery['name'] = {
           $regex: get(query, 'name'),
