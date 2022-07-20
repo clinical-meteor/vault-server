@@ -711,31 +711,41 @@ if(typeof serverRouteManifest === "object"){
                 isChained = true;
                 let newQueryUrl = "";
                 // console.log('queryParts[0]', queryParts[0])
-                let chainedCollectionName = FhirUtilities.pluralizeResourceName(capitalize(queryParts[0]))
-                newQueryUrl = chainedCollectionName + "?" + queryParts[1] + "=" + req.query[key]
+                let softTarget = capitalize(queryParts[0]);
+                if(queryParts[0] === "providedBy"){
+                  softTarget = "Organization";
+                } 
+                let chainedCollectionName = FhirUtilities.pluralizeResourceName(softTarget)
+                newQueryUrl = softTarget + "?" + queryParts[1] + "=" + req.query[key]
                 process.env.DEBUG && console.log('newQueryUrl', newQueryUrl);
 
                 // look up search parameter for chained query
-                let chainedSearchParams = SearchParameters.findOne({code: queryParts[1]});
+                let chainQuery = {code: queryParts[1], target: softTarget};
+                console.log('chainQuery', chainQuery);
+
+                let chainedSearchParams = SearchParameters.findOne(chainQuery);
                 if(chainedSearchParams){
-                  process.env.DEBUG && console.log('chainedSearchParams.expression', chainedSearchParams.expression)
-                  process.env.DEBUG && console.log('chainedSearchParams.xpath', chainedSearchParams.xpath)
-                  process.env.DEBUG && console.log('chainedCollectionName', chainedCollectionName)
-                }
-
-                if(Collections[chainedCollectionName]){
-                  let chainedQuery = {};
-                  chainedQuery[chainedSearchParams.xpath] = req.query[key]
-                  process.env.DEBUG && console.log('chainedQuery', chainedQuery)
-                  
-                  // map the ids of any records that are found into an array
-                  chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
-                    return capitalize(queryParts[0]) + "/" + record.id;
-                  })
-
-                  // the create the JOIN equivalent by matching the chain reference 
-                  // to any of the ids included in the array
-                  mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
+                  if(chainedSearchParams){
+                    process.env.DEBUG && console.log('chainedSearchParams.expression', chainedSearchParams.expression)
+                    process.env.DEBUG && console.log('chainedSearchParams.xpath', chainedSearchParams.xpath)
+                    process.env.DEBUG && console.log('chainedCollectionName', chainedCollectionName)
+                  }
+  
+                  if(Collections[chainedCollectionName]){
+                    let chainedQuery = {};
+                    chainedQuery[chainedSearchParams.xpath] = req.query[key]
+                    process.env.DEBUG && console.log('chainedQuery', chainedQuery)
+                    
+                    // map the ids of any records that are found into an array
+                    chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
+                      return softTarget + "/" + record.id;
+                    })
+  
+                    // the create the JOIN equivalent by matching the chain reference 
+                    // to any of the ids included in the array
+                    mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
+                  }
+  
                 }
               }
             }
