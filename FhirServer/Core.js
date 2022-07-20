@@ -211,7 +211,13 @@ function parseUserAuthorization(req){
         if(clientRegistration && authParts[1]){
           if(get(clientRegistration, 'client_secret') === authParts[1]){
             isAuthorized = true;
-          }
+
+            // system access; 
+            // replace with JWT and SMART Backend Services
+          } else if(get(clientRegistration, 'client_secret') === "system:1234567890"){
+            isAuthorized = true;
+          }          
+
         }
       } else {
         console.log("For some reason the OAuthClients collection doesn't exist.")
