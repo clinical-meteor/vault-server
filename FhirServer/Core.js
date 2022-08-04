@@ -1671,8 +1671,10 @@ if(typeof serverRouteManifest === "object"){
             } else if (req.params.param.includes('$match')) {
               console.log("$MATCH!!!!");
 
-              console.log('req.body.name', get(req, 'body.name'));
-
+              console.log('req.body.parameter[0]', get(req, 'body.parameter[0].resource'));
+              let matchParams = get(req, 'body.parameter[0].resource');
+              let fullName = get(matchParams, 'name[0].family') + get(matchParams, 'name[0].given[0]');
+              console.log('name:', fullName);
               let generatedQuery = {};
               let weighting = 0;
 
