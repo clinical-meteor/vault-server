@@ -292,6 +292,7 @@ function signProvenance(record){
   let provenanceRecord = {
     resourceType: "Provenance",                  
     target: [],
+    recorded: new Date(),
     signature: [{
       type: [{
         system: 'urn:iso-astm:E1762-95:2013',
@@ -309,15 +310,21 @@ function signProvenance(record){
   if(Array.isArray(record)){
     record.forEach(function(rec){
       provenanceRecord.target.push({
+        display: get(rec, 'name', ''),
         reference: get(rec, 'id'),
-        type: get(rec, 'referenceId'),
+        type: get(rec, 'resourceType'),
       });  
     })
   } else {
     provenanceRecord.target.push({
+      display: get(record, 'name', ''),
       reference: get(record, 'id'),
-      type: get(record, 'referenceId'),
+      type: get(record, 'resourceType'),
     });  
+  }
+  
+  if(get(Meteor, 'settings.private.fhir.generateProvenanceIndex')){
+    Provenances.insert(provenanceRecord);
   }
 
   return JSON.stringify(provenanceRecord)
