@@ -16,6 +16,8 @@ import forge from 'node-forge';
 
 import base64url from 'base64-url';
 
+import {validateMinimumRequirement} from '../lib/MatchUtilties';
+
 import { 
   AllergyIntolerances,
   AuditEvents,
@@ -1667,14 +1669,22 @@ if(typeof serverRouteManifest === "object"){
             //==============================================================================
             // this is operator logic, and will probably need to go into a switch statement
 
+
+            /*
+            * Parameters: 
+            * Passport number: ehc
+            * 
+            * 
+            * 
+            */
             // post /Organization/$match
             } else if (req.params.param.includes('$match')) {
               console.log("$MATCH!!!!");
 
               console.log('req.body.parameter[0]', get(req, 'body.parameter[0].resource'));
               let matchParams = get(req, 'body.parameter[0].resource');
-              let fullName = get(matchParams, 'name[0].family') + get(matchParams, 'name[0].given[0]');
-              console.log('name:', fullName);
+              // let fullName = matchParams.name[0].family + get(matchParams, 'name[0].given[0]');
+              console.log('name:', validateMinimumRequirement(matchParams));
               let generatedQuery = {};
               let weighting = 0;
 
