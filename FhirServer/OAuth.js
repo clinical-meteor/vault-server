@@ -398,7 +398,27 @@ Meteor.startup(function() {
   console.log('========================================================================');
   console.log('Generating SMART on FHIR / OAuth routes...');
 
+  JsonRoutes.add("get", "/oauth/registration", function (req, res, next) {
+    console.log('========================================================================');
+    console.log('GET ' + '/oauth/registration');
 
+    preParse(req);
+
+    res.setHeader('Content-type', 'application/json');
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    JsonRoutes.sendResult(res, {
+      code: 200,
+      data: {
+        "message": "This is not the /registration route you are looking for.  You have specified a GET operation.  To register a client, please send a POST operation to /oauth/registration.",
+        "sample_payload": {
+          "client_id": "12345",
+          "client_name": "ACME App",
+          "scope": "profile fhirUser */Patient"
+        }
+      }
+    });  
+  });
 
   JsonRoutes.add("post", "/oauth/registration", function (req, res, next) {
     console.log('========================================================================');
