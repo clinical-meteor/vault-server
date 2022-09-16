@@ -350,7 +350,7 @@ function certificateIsRevoked(serialNumber, revokationList){
 }
 function preParse(request){
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
-    process.env.TRACE && console.log('Inbound request', request)
+    process.env.EXHAUSTIVE && console.log('Inbound request', request)
     if(InboundChannel){
       InboundChannel.InboundRequests.insert({
         date: new Date(),
@@ -1107,92 +1107,6 @@ Meteor.startup(function() {
     } 
   });
   
-  // JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
-  //   console.log('========================================================================');
-  //   console.log('GET ' + '/oauth/token');
-
-  //   res.setHeader('Content-type', 'application/json');
-  //   res.setHeader("Access-Control-Allow-Origin", "*");
-
-  //   let returnPayload = {
-  //     code: 200,
-  //     data: {
-  //       "access_token": Random.id(),
-  //       "token_type": "Bearer"
-  //       // "expires_in": ""
-  //     }
-  //   }
-  //   if(process.env.TRACE){
-  //     console.log('return payload', returnPayload);
-  //   }
-   
-  //   JsonRoutes.sendResult(res, returnPayload);
-  // });
-  
-  JsonRoutes.add("post", "/oauth/token", function (req, res, next) {
-    console.log('========================================================================');
-    console.log('POST ' + '/oauth/token');
-
-    preParse(req);
-
-    res.setHeader('Content-type', 'application/json');
-    res.setHeader("Access-Control-Allow-Origin", "*");
-
-    process.env.DEBUG && console.log("")
-    process.env.DEBUG && console.log("req.query");
-    process.env.DEBUG && console.log(req.query);
-    process.env.DEBUG && console.log("")
-    process.env.DEBUG && console.log("req.body")
-    process.env.DEBUG && console.log(req.body);
-
-    // need to do a lookup to find scopes?
-
-    let authorizedClient = OAuthClients.findOne({authorization_code: get(req.body, 'code')});
-
-    process.env.DEBUG && console.log("");
-    process.env.DEBUG && console.log('authorizedClient');
-    process.env.DEBUG && console.log(authorizedClient);
-    process.env.DEBUG && console.log("");
-
-    if(authorizedClient){
-      if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, '_id'))){
-        JsonRoutes.sendResult(res, {
-          code: 401
-        });
-      } else {
-        // should probably store the access token
-        let newAccessToken = Random.id();
-
-        let returnPayload = {
-          code: 200,
-          data: {
-            // The access token issued by the authorization server
-            "access_token": newAccessToken,
-
-            // Fixed value
-            "token_type": "Bearer",
-
-            // Scope of access authorized. Note that this can be different from the scopes requested by the app.
-            "scope": "openid fhirUser launch offline_access user/*.cruds",
-
-            // The lifetime in seconds of the access token. 
-            // For example, the value 3600 denotes that the access token will expire in one hour from the time the response was generated.
-            "expires_in": get(Meteor, 'settings.private.fhir.tokenTimeout', 86400) 
-          }
-        }
-        if(process.env.TRACE){
-          console.log('return payload', returnPayload);
-        }
-
-        JsonRoutes.sendResult(res, returnPayload);
-      }
-    } else {
-      JsonRoutes.sendResult(res, {
-        code: 400
-      });
-    }
-  });
-
   JsonRoutes.add("get", "/oauth/authorize", function (req, res, next) {
     console.log('========================================================================');
     console.log('GET ' + '/oauth/authorize');
@@ -1363,6 +1277,101 @@ Meteor.startup(function() {
       }  
     }
   });
+
+  // JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
+  //   console.log('========================================================================');
+  //   console.log('GET ' + '/oauth/token');
+
+  //   res.setHeader('Content-type', 'application/json');
+  //   res.setHeader("Access-Control-Allow-Origin", "*");
+
+  //   let returnPayload = {
+  //     code: 200,
+  //     data: {
+  //       "access_token": Random.id(),
+  //       "token_type": "Bearer"
+  //       // "expires_in": ""
+  //     }
+  //   }
+  //   if(process.env.TRACE){
+  //     console.log('return payload', returnPayload);
+  //   }
+   
+  //   JsonRoutes.sendResult(res, returnPayload);
+  // });
+  
+  JsonRoutes.add("post", "/oauth/token", function (req, res, next) {
+    console.log('========================================================================');
+    console.log('POST ' + '/oauth/token');
+
+    preParse(req);
+
+    res.setHeader('Content-type', 'application/json');
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    process.env.DEBUG && console.log("")
+    process.env.DEBUG && console.log("req.query");
+    process.env.DEBUG && console.log(req.query);
+    process.env.DEBUG && console.log("")
+    process.env.DEBUG && console.log("req.body")
+    process.env.DEBUG && console.log(req.body);
+
+    // need to do a lookup to find scopes?
+
+    let authorizedClient = OAuthClients.findOne({authorization_code: get(req.body, 'code')});
+
+    process.env.DEBUG && console.log("");
+    process.env.DEBUG && console.log('authorizedClient');
+    process.env.DEBUG && console.log(authorizedClient);
+    process.env.DEBUG && console.log("");
+
+    if(authorizedClient){
+      // if(get(req.body, 'client_id') && (get(req.body, 'client_id') !== get(authorizedClient, '_id'))){
+      //   JsonRoutes.sendResult(res, {
+      //     code: 401
+      //   });
+      // } else {
+
+
+
+        let newAccessToken = Random.id();
+        
+        delete authorizedClient._document;
+        authorizedClient.access_token = newAccessToken;
+        authorizedClient.access_token_created_at = new Date();
+        OAuthClients.update({_id: authorizedClient._id}, {$set: authorizedClient});
+
+        let returnPayload = {
+          code: 200,
+          data: {
+            // The access token issued by the authorization server
+            "access_token": newAccessToken,
+
+            // Fixed value
+            "token_type": "Bearer",
+
+            // Scope of access authorized. Note that this can be different from the scopes requested by the app.
+            "scope": "openid fhirUser launch offline_access user/*.cruds",
+
+            // The lifetime in seconds of the access token. 
+            // For example, the value 3600 denotes that the access token will expire in one hour from the time the response was generated.
+            "expires_in": get(Meteor, 'settings.private.fhir.tokenTimeout', 86400) 
+          }
+        }
+        if(process.env.TRACE){
+          console.log('return payload', returnPayload);
+        }
+
+        JsonRoutes.sendResult(res, returnPayload);
+      // }
+    } else {
+      JsonRoutes.sendResult(res, {
+        code: 400
+      });
+    }
+  });
+
+
 
   JsonRoutes.add("get", "/authorizations/manage", function (req, res, next) {
     console.log('========================================================================');
