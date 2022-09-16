@@ -250,8 +250,7 @@ const fetchCertificate = (url, certificateArray, callback) => {
       });
     }).on('error', reject);
   });
-};
-
+}
 function fetchRevokationList(revokationUrl){
   return new Promise((resolve, reject) => {
     http.get(revokationUrl, res => {
@@ -326,7 +325,6 @@ function fetchRevokationList(revokationUrl){
     }).on('error', reject);
   });
 }
-
 function certificateIsExpired(validity){
   let isExpired = false;
 
@@ -350,7 +348,6 @@ function certificateIsRevoked(serialNumber, revokationList){
   
   return isRevoked;
 }
-
 function preParse(request){
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
@@ -367,7 +364,6 @@ function preParse(request){
   }
   return request;
 }
-
 function fuzzyMatch(redirect_uris, redirectUri){
   let fuzzyMatch = false;
   let redirectHostname = new URL(redirectUri);
@@ -414,7 +410,8 @@ Meteor.startup(function() {
         "sample_payload": {
           "client_id": "12345",
           "client_name": "ACME App",
-          "scope": "profile fhirUser */Patient"
+          "scope": "profile fhirUser */Patient",
+          "redirect_uris": ["https://acme.org/redirect"]
         }
       }
     });  
@@ -1109,6 +1106,7 @@ Meteor.startup(function() {
 
     } 
   });
+  
   // JsonRoutes.add("get", "/oauth/token", function (req, res, next) {
   //   console.log('========================================================================');
   //   console.log('GET ' + '/oauth/token');
@@ -1130,6 +1128,7 @@ Meteor.startup(function() {
    
   //   JsonRoutes.sendResult(res, returnPayload);
   // });
+  
   JsonRoutes.add("post", "/oauth/token", function (req, res, next) {
     console.log('========================================================================');
     console.log('POST ' + '/oauth/token');
@@ -1193,6 +1192,7 @@ Meteor.startup(function() {
       });
     }
   });
+
   JsonRoutes.add("get", "/oauth/authorize", function (req, res, next) {
     console.log('========================================================================');
     console.log('GET ' + '/oauth/authorize');
@@ -1249,13 +1249,13 @@ Meteor.startup(function() {
       JsonRoutes.sendResult(res, { code: 301 });     
     } else {
       if(clientId){
-        let client = OAuthClients.findOne({_id: clientId});
+        let client = OAuthClients.findOne({client_id: clientId});
         if(client){
           console.log('client', client)
   
           let newAuthorizationCode = Random.id();
   
-          OAuthClients.update({_id: clientId}, {$set: {
+          OAuthClients.update({client_id: clientId}, {$set: {
             "authorization_code":  newAuthorizationCode
           }});        
   
