@@ -719,9 +719,9 @@ Meteor.startup(function() {
                   }
                   if(!get(verifiedJwt, 'redirect_uris')){
                     console.log('verified JWT did not have a redirect_uris')
-                    if(!process.env.RELAX_UDAP_REGISTRATION){
+                    // if(!process.env.RELAX_UDAP_REGISTRATION){
                       Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a redirect_uris"}});
-                    }
+                    //}
                   }
                   if(!get(verifiedJwt, 'grant_types')){
                     console.log('verified JWT did not have a grant_types')
@@ -729,9 +729,9 @@ Meteor.startup(function() {
                   }
                   if(!get(verifiedJwt, 'response_types')){
                     console.log('verified JWT did not have a response_types')
-                    if(!process.env.RELAX_UDAP_REGISTRATION){
+                    // if(!process.env.RELAX_UDAP_REGISTRATION){
                       Object.assign(responsePayload, { code: 400, data: {"error": "invalid_client_metadata", "description": "verified JWT did not have a response_types"}});
-                    }
+                    //}
                   }
                   if(!get(verifiedJwt, 'token_endpoint_auth_method')){
                     console.log('verified JWT did not have a token_endpoint_auth_method')
