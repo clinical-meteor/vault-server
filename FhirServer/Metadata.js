@@ -162,6 +162,14 @@ const Server = {
         CapabilityStatement.rest[0].resource.push(newResourceStatement);
       })
     }
+
+    if (Array.isArray(Meteor, 'settings.private.fhir.operation')) {
+      CapabilityStatement.operation = [];
+      Meteor.settings.private.fhir.operation.forEach(function(op){
+        CapabilityStatement.operation.push(op);
+      });
+    }
+
     return CapabilityStatement;
   },
   getWellKnownSmartConfiguration: function(){
