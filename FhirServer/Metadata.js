@@ -131,9 +131,9 @@ const Server = {
           // "searchParam": defaultSearchParams
         }
 
-        if (Array.isArray(Meteor.settings.private.fhir.rest[key].operation)) {
+        if (Array.isArray(Meteor.settings.private.fhir.rest[key].operations)) {
           newResourceStatement.operation = [];
-          Meteor.settings.private.fhir.rest[key].operation.forEach(function(op){
+          Meteor.settings.private.fhir.rest[key].operations.forEach(function(op){
             newResourceStatement.operation.push(op);
           });
         }
@@ -163,10 +163,10 @@ const Server = {
       })
     }
 
-    if (Array.isArray(Meteor, 'settings.private.fhir.operation')) {
-      CapabilityStatement.operation = [];
-      Meteor.settings.private.fhir.operation.forEach(function(op){
-        CapabilityStatement.operation.push(op);
+    if (Array.isArray(Meteor.settings.private.fhir.systemOperations)) {
+      CapabilityStatement.rest[0].operation = [];
+      Meteor.settings.private.fhir.systemOperations.forEach(function(op){
+        CapabilityStatement.rest[0].operation.push(op);
       });
     }
 
