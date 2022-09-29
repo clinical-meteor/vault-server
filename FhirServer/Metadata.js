@@ -121,12 +121,6 @@ const Server = {
       Object.keys(Meteor.settings.private.fhir.rest).forEach(function(key){
         let newResourceStatement = {
           "type": key,
-          "operation": [
-            {
-                "name": "$match",
-                "definition": "http://hl7.org/fhir/OperationDefinition/Patient-match"
-            }
-          ],
           "interaction": defaultInteractions,
           // "versioning": "no-version"
           // "readHistory": false,
@@ -135,6 +129,13 @@ const Server = {
           // "conditionalUpdate": false,
           // "conditionalDelete": "not-supported"
           // "searchParam": defaultSearchParams
+        }
+
+        if (Array.isArray(Meteor.settings.private.fhir.rest[key].operation)) {
+          newResourceStatement.operation = [];
+          Meteor.settings.private.fhir.rest[key].operation.forEach(function(op)){
+            newResourceStatement.operation.push(op);
+          }
         }
 
         if (Array.isArray(Meteor.settings.private.fhir.rest[key].interactions)) {
@@ -259,7 +260,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -276,7 +277,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -296,7 +297,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -315,7 +316,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -334,7 +335,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
