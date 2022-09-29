@@ -282,10 +282,12 @@ function signProvenance(record){
   let publicKey = get(Meteor, 'settings.private.x509.publicKey');
   let privateKey = get(Meteor, 'settings.private.x509.privateKey');
 
-  delete record._document;
-  delete record._id;
-
-  console.log('signProvenance', record)
+  if(record){
+    delete record._document;
+    delete record._id;
+  
+    console.log('signProvenance', record)  
+  }
 
   var token = jwt.sign(JSON.stringify(record), privateKey, { algorithm: 'RS256'})
 
@@ -1021,7 +1023,16 @@ if(typeof serverRouteManifest === "object"){
 
           //------------------------------------------------------------------------------------------------
 
-          if (req.body) {
+          if(get(req, 'headers.x-provenance')){
+            let xProvenance = JSON.parse(get(req, 'headers.x-provenance'));
+
+            if(Collections["Provenances"]){
+              console.log("Received an x-provenance record.  Writing it to the Provenances collection....");
+              Collections["Provenances"].insert(xProvenance);
+            }
+          }
+
+          if (get(req, 'body')) {
             newRecord = req.body;
             if(get(Meteor, 'settings.private.trace') === true) { console.log('req.body', req.body); }
             
@@ -1079,6 +1090,31 @@ if(typeof serverRouteManifest === "object"){
                       if(get(Meteor, 'settings.private.trace') === true) { console.log('result', result); }
                       res.setHeader("Last-Modified", new Date());
                       res.setHeader("ETag", fhirVersion);
+
+                      // Now that the record is written; if it was a Provenance, lets check the payload
+                      if(collectionName === "Provenances"){
+
+                        let xProvenanceData = get(newRecord, 'signature[0].data');
+
+                        let decodedProvenanceData = jwt.decode(xProvenanceData, {complete: true})
+                        console.log('decodedProvenanceData', decodedProvenanceData);
+            
+                        let provenancePayloadResourceType = get(decodedProvenanceData, 'payload.resourceType');
+                        console.log('provenancePayload.resourceType', provenancePayloadResourceType);
+            
+                        let provenancePayload = get(decodedProvenanceData, 'payload');
+                        console.log('provenancePayload.payload', provenancePayload);
+            
+                        if(provenancePayloadResourceType){
+                          let collectionName = FhirUtilities.pluralizeResourceName(provenancePayloadResourceType)
+                          if(Collections[collectionName]){
+                            console.log('Adding a new ' + provenancePayloadResourceType + ' which was found in the x-provenance header payload.')
+                            if(!Collections[collectionName].findOne({id: provenancePayload.id})){
+                              Collections[collectionName].insert(provenancePayload)
+                            }
+                          }
+                        }
+                      }
 
                       // Re-enable the following for Abacus & SANER
                       // But document accordingly, and need to include Provenance stamping
