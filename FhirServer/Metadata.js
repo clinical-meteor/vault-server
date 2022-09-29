@@ -133,9 +133,9 @@ const Server = {
 
         if (Array.isArray(Meteor.settings.private.fhir.rest[key].operation)) {
           newResourceStatement.operation = [];
-          Meteor.settings.private.fhir.rest[key].operation.forEach(function(op)){
+          Meteor.settings.private.fhir.rest[key].operation.forEach(function(op){
             newResourceStatement.operation.push(op);
-          }
+          });
         }
 
         if (Array.isArray(Meteor.settings.private.fhir.rest[key].interactions)) {
