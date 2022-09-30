@@ -90,15 +90,15 @@ const Server = {
         "extension": [
           {
             "url": "token",
-            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token") 
+            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token")
           },
           {
             "url": "authorize",
-            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize") 
+            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize")
           },
           {
             "url": "register",
-            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.registrationEndpoint', "oauth/registration") 
+            "valueUri": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.registrationEndpoint', "oauth/registration")
           },
           {
             "url": "manage",
@@ -116,7 +116,7 @@ const Server = {
         "url": "http://fhir-registry.smarthealthit.org/StructureDefinition/oauth-uris"
       })
     }
-    
+
     if (has(Meteor, 'settings.private.fhir.rest')) {
       Object.keys(Meteor.settings.private.fhir.rest).forEach(function(key){
         let newResourceStatement = {
@@ -129,6 +129,13 @@ const Server = {
           // "conditionalUpdate": false,
           // "conditionalDelete": "not-supported"
           // "searchParam": defaultSearchParams
+        }
+
+        if (Array.isArray(Meteor.settings.private.fhir.rest[key].operations)) {
+          newResourceStatement.operation = [];
+          Meteor.settings.private.fhir.rest[key].operations.forEach(function(op){
+            newResourceStatement.operation.push(op);
+          });
         }
 
         if (Array.isArray(Meteor.settings.private.fhir.rest[key].interactions)) {
@@ -153,14 +160,22 @@ const Server = {
 
 
         CapabilityStatement.rest[0].resource.push(newResourceStatement);
-      })      
+      })
     }
+
+    if (Array.isArray(Meteor.settings.private.fhir.systemOperations)) {
+      CapabilityStatement.rest[0].operation = [];
+      Meteor.settings.private.fhir.systemOperations.forEach(function(op){
+        CapabilityStatement.rest[0].operation.push(op);
+      });
+    }
+
     return CapabilityStatement;
   },
   getWellKnownSmartConfiguration: function(){
     let response = {
       "resourceType": "Basic",
-      
+
       // required fields
       "authorization_endpoint": Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.authorizationEndpoint', "oauth/authorize"),
       "token_endpoint":  Meteor.absoluteUrl() + get(Meteor, 'settings.private.fhir.security.tokenEndpoint', "oauth/token") ,
@@ -185,7 +200,7 @@ const Server = {
   getWellKnownUdapConfiguration: function(){
     let response = {
       "resourceType": "UdapMetadata",
-      "x5c": [],      
+      "x5c": [],
       "udap_versions_supported": ["1"],
       "udap_certifications_supported": ["https://vhdir.meteorapp.com/udap/profiles/example-certification"],
       "udap_certifications_required": ["https://vhdir.meteorapp.com/udap/profiles/example-certification"],
@@ -214,7 +229,7 @@ const Server = {
       "udap_profiles_supported": ["udap_authz", "udap_dcr"],
       "udap_authorization_extensions_supported": [],
       "udap_authorization_extensions_required": [],
-      "signed_endpoints": []      
+      "signed_endpoints": []
     }
 
     let fhirRestEndpoints = get(Meteor, 'settings.private.fhir.rest');
@@ -253,7 +268,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -270,7 +285,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -290,7 +305,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -309,7 +324,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
@@ -328,7 +343,7 @@ Meteor.startup(function() {
     if(process.env.TRACE){
       console.log('return payload', returnPayload);
     }
-   
+
     JsonRoutes.sendResult(res, returnPayload);
   });
 
