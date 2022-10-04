@@ -448,6 +448,7 @@ Meteor.startup(function() {
     console.log('========================================================================');
     console.log('Decoding the payload and checking headers...');
     console.log('')
+    
     if(decoded) {
       process.env.DEBUG && console.log('decoded.payload', decoded.payload);
       process.env.DEBUG && console.log('decoded.header', decoded.header);
