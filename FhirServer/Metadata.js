@@ -163,11 +163,13 @@ const Server = {
       })
     }
 
-    if (Array.isArray(Meteor.settings.private.fhir.systemOperations)) {
-      CapabilityStatement.rest[0].operation = [];
-      Meteor.settings.private.fhir.systemOperations.forEach(function(op){
-        CapabilityStatement.rest[0].operation.push(op);
-      });
+    if(get(Meteor, 'settings.private.fhir')){
+      if (Array.isArray(Meteor.settings.private.fhir.systemOperations)) {
+        CapabilityStatement.rest[0].operation = [];
+        Meteor.settings.private.fhir.systemOperations.forEach(function(op){
+          CapabilityStatement.rest[0].operation.push(op);
+        });
+      }        
     }
 
     return CapabilityStatement;
