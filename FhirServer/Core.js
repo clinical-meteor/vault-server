@@ -9,7 +9,9 @@ import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
 
-import InboundChannel from '../lib/InboundRequests.schema.js';
+
+
+// import InboundChannel from '../lib/InboundRequests.schema.js';
 
 import jwt from 'jsonwebtoken';
 import forge from 'node-forge';
@@ -64,7 +66,8 @@ import {
   Tasks,
   ValueSets,
   VerificationResults,
-  FhirUtilities
+  FhirUtilities,
+  InboundRequests
 } from 'meteor/clinical:hl7-fhir-data-infrastructure';
 
 import OAuthClientComponents from '../lib/OAuthClients.schema.js';
@@ -264,8 +267,8 @@ function preParse(request){
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
-    if(InboundChannel){
-      InboundChannel.InboundRequests.insert({
+    if(InboundRequests){
+      InboundRequests.insert({
         date: new Date(),
         method: get(request, 'method'),
         url: get(request, 'url'),
@@ -331,6 +334,10 @@ function signProvenance(record){
 
   return JSON.stringify(provenanceRecord)
 }
+
+//==========================================================================================
+// IPFS Functions 
+// probably want to refactor and extract into separate file
 
 async function exportToIpfsNode(){
   let operationOutcome = {
