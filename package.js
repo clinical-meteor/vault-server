@@ -88,6 +88,7 @@ Npm.depends({
     "mongo-query": "0.5.7",
     "accesscontrol": "2.2.1",
     "role-acl": "4.5.4",
+    "ndjson-parse": "1.0.4",
 
     "moment-timezone": "0.5.34",
     // // "world-clock": "1.4.0",

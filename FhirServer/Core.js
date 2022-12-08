@@ -214,7 +214,10 @@ if(typeof OAuthServerConfig === 'object'){
 
 function parseUserAuthorization(req){
   process.env.DEBUG && console.log("Parsing user authorization....")
+
+
   let isAuthorized = false;
+  let isAuthorizedToExport = false;
 
   // BASIC AUTH
   if(get(Meteor, 'settings.private.enableBasicAuth')){
@@ -240,9 +243,15 @@ function parseUserAuthorization(req){
     }  
   }
 
+  // BACKEND SERVICES (JWT)
   if(get(Meteor, 'settings.private.enableJwtBackendServices')){
     if(get(req, "headers.authorization")){
       let encodedAuth = get(req, "headers.authorization");
+
+      isAuthorized = "system"; // ???
+      isAuthorizedToExport = true;
+      
+
     //   let decodedAuth = base64url.decode(encodedAuth.replace("Basic ", ""))
     //   console.log('decodedAuth: ' + decodedAuth)
   
@@ -269,7 +278,7 @@ function parseUserAuthorization(req){
     }  
   }
 
-  // SMART on FHIR
+  // SMART on FHIR (OAUTH) 
   let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
   if(typeof OAuthServerConfig === 'object'){
     let accessToken = OAuthServerConfig.collections.accessToken.findOne({accessToken: accessTokenStr})
@@ -294,7 +303,11 @@ function parseUserAuthorization(req){
     }
   }
 
-  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+  if (get(Meteor, 'settings.private.fhir.disableOauth') === true) {
+    isAuthorized = true;
+  }
+
+  if (process.env.NOAUTH) {
     isAuthorized = true;
   }
 
@@ -482,8 +495,7 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          let isAuthorized = parseUserAuthorization(req);
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
 
             process.env.DEBUG && console.log('req.query', req.query)
@@ -535,8 +547,7 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader("ETag", fhirVersion);
 
           // is this person authorized?
-          let isAuthorized = parseUserAuthorization(req);
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
 
 
@@ -555,7 +566,8 @@ if(typeof serverRouteManifest === "object"){
             process.env.DEBUG && console.log('req.query', req.query)
             process.env.DEBUG && console.log('req.params', req.params)
 
-            if(req.params.id === "$export"){
+            // AUTHENTICATION NEEDED:  BULK DATA ACCESS
+            if((req.params.id === "$export") && (isAuthorizedToExport)){
 
               console.log(collectionName + " records: " + Collections[collectionName].find().count());
               
@@ -781,6 +793,7 @@ if(typeof serverRouteManifest === "object"){
             }
     
           } else {
+
             // Unauthorized
             JsonRoutes.sendResult(res, {
               code: 401
@@ -797,111 +810,109 @@ if(typeof serverRouteManifest === "object"){
             console.log('Resource Type: ' + routeResourceType);               
           }
 
-          // first scan the query for any chained queries
-          process.env.DEBUG && console.log('--------------------------------------')
-          process.env.DEBUG && console.log('Checking for chained queries (GET)....')
-          process.env.DEBUG && console.log('req.query', req.query);
-
           let mongoQuery = {};
           let chainedIds;
 
-          Object.keys(req.query).forEach(function(key){
-            let queryParts = key.split(".");
-            if(Array.isArray(queryParts)){
-              let isChained = false;
-              process.env.TRACE && console.log("queryParts.length", queryParts.length);
-              if(queryParts.length === 2){
-                isChained = true;
-                let newQueryUrl = "";
-                // console.log('queryParts[0]', queryParts[0])
-                let softTarget = capitalize(queryParts[0]);
-                if(queryParts[0] === "providedBy"){
-                  softTarget = "Organization";
-                } 
-                let chainedCollectionName = FhirUtilities.pluralizeResourceName(softTarget)
-                newQueryUrl = softTarget + "?" + queryParts[1] + "=" + req.query[key]
-                process.env.DEBUG && console.log('newQueryUrl', newQueryUrl);
+            // first scan the query for any chained queries
+            process.env.DEBUG && console.log('--------------------------------------')
+            process.env.DEBUG && console.log('Checking for chained queries (GET)....')
+            process.env.DEBUG && console.log('req.query', req.query);
 
-                // look up search parameter for chained query
-                let chainQuery = {code: queryParts[1], target: softTarget};
-                console.log('chainQuery', chainQuery);
+            Object.keys(req.query).forEach(function(key){
+              let queryParts = key.split(".");
+              if(Array.isArray(queryParts)){
+                let isChained = false;
+                process.env.TRACE && console.log("queryParts.length", queryParts.length);
+                if(queryParts.length === 2){
+                  isChained = true;
+                  let newQueryUrl = "";
+                  // console.log('queryParts[0]', queryParts[0])
+                  let softTarget = capitalize(queryParts[0]);
+                  if(queryParts[0] === "providedBy"){
+                    softTarget = "Organization";
+                  } 
+                  let chainedCollectionName = FhirUtilities.pluralizeResourceName(softTarget)
+                  newQueryUrl = softTarget + "?" + queryParts[1] + "=" + req.query[key]
+                  process.env.DEBUG && console.log('newQueryUrl', newQueryUrl);
 
-                let chainedSearchParams = SearchParameters.findOne(chainQuery);
-                if(chainedSearchParams){
+                  // look up search parameter for chained query
+                  let chainQuery = {code: queryParts[1], target: softTarget};
+                  console.log('chainQuery', chainQuery);
+
+                  let chainedSearchParams = SearchParameters.findOne(chainQuery);
                   if(chainedSearchParams){
-                    process.env.DEBUG && console.log('chainedSearchParams.expression', chainedSearchParams.expression)
-                    process.env.DEBUG && console.log('chainedSearchParams.xpath', chainedSearchParams.xpath)
-                    process.env.DEBUG && console.log('chainedCollectionName', chainedCollectionName)
+                    if(chainedSearchParams){
+                      process.env.DEBUG && console.log('chainedSearchParams.expression', chainedSearchParams.expression)
+                      process.env.DEBUG && console.log('chainedSearchParams.xpath', chainedSearchParams.xpath)
+                      process.env.DEBUG && console.log('chainedCollectionName', chainedCollectionName)
+                    }
+    
+                    if(Collections[chainedCollectionName]){
+                      let chainedQuery = {};
+                      chainedQuery[chainedSearchParams.xpath] = req.query[key]
+                      process.env.DEBUG && console.log('chainedQuery', chainedQuery)
+                      
+                      // map the ids of any records that are found into an array
+                      chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
+                        return softTarget + "/" + record.id;
+                      })
+    
+                      // the create the JOIN equivalent by matching the chain reference 
+                      // to any of the ids included in the array
+                      mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
+                    }
+    
                   }
-  
-                  if(Collections[chainedCollectionName]){
-                    let chainedQuery = {};
-                    chainedQuery[chainedSearchParams.xpath] = req.query[key]
-                    process.env.DEBUG && console.log('chainedQuery', chainedQuery)
-                    
-                    // map the ids of any records that are found into an array
-                    chainedIds = Collections[chainedCollectionName].find(chainedQuery).map(function(record){
-                      return softTarget + "/" + record.id;
-                    })
-  
-                    // the create the JOIN equivalent by matching the chain reference 
-                    // to any of the ids included in the array
-                    mongoQuery[queryParts[0] + ".reference"] = {$in: chainedIds}
-                  }
-  
                 }
               }
-            }
-          })
+            })
 
-          process.env.TRACE && console.log('chainedIds', chainedIds);
+            process.env.TRACE && console.log('chainedIds', chainedIds);
 
+            // now search through the query for regular run-of-the-mill queries
+            SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
+              process.env.DEBUG && console.log('------------------------------------------------------')
+              // process.env.DEBUG && console.log('req.query', req.query);
+              process.env.DEBUG && console.log('SearchParameter');
+              process.env.DEBUG && console.log('id:         ' + get(searchParameter, 'id'));
+              process.env.DEBUG && console.log('code:       ' + get(searchParameter, 'code'));
+              process.env.DEBUG && console.log('expression: ' + get(searchParameter, 'expression'));
+              process.env.DEBUG && console.log('base        ' + get(searchParameter, 'base'));
+              process.env.DEBUG && console.log('target      ' + get(searchParameter, 'target[0]'));
+              process.env.DEBUG && console.log('xpath:      ' + get(searchParameter, 'xpath'));
+              process.env.DEBUG && console.log(' ');
 
-          // now search through the query for regular run-of-the-mill queries
-          SearchParameters.find({base: routeResourceType}).forEach(function(searchParameter){
-            process.env.DEBUG && console.log('------------------------------------------------------')
-            // process.env.DEBUG && console.log('req.query', req.query);
-            process.env.DEBUG && console.log('SearchParameter');
-            process.env.DEBUG && console.log('id:         ' + get(searchParameter, 'id'));
-            process.env.DEBUG && console.log('code:       ' + get(searchParameter, 'code'));
-            process.env.DEBUG && console.log('expression: ' + get(searchParameter, 'expression'));
-            process.env.DEBUG && console.log('base        ' + get(searchParameter, 'base'));
-            process.env.DEBUG && console.log('target      ' + get(searchParameter, 'target[0]'));
-            process.env.DEBUG && console.log('xpath:      ' + get(searchParameter, 'xpath'));
-            process.env.DEBUG && console.log(' ');
+              Object.keys(req.query).forEach(function(queryKey){              
+                // for query keys that dont have a value
+                // just build a mongo query that searches if the key exists or not
+                if(Object.hasOwnProperty(queryKey) && (Object[queryKey] === "")){
+                  let fieldExistsQuery = {};
+                  fieldExistsQuery[queryKey] = {$exists: true};
+                  Object.assign(mongoQuery, fieldExistsQuery);
+                } else if(get(searchParameter, 'code') === queryKey){
+                  // otherwise, map the fhirpath to mongo
+                  Object.assign(mongoQuery, fhirPathToMongo(searchParameter, queryKey, req))
+                }                
+              })       
+              
+              if(get(Meteor, 'settings.private.debug') === true) { console.log('mongoQuery', JSON.stringify(mongoQuery)); }
+            }) 
 
-            Object.keys(req.query).forEach(function(queryKey){              
-              // for query keys that dont have a value
-              // just build a mongo query that searches if the key exists or not
-              if(Object.hasOwnProperty(queryKey) && (Object[queryKey] === "")){
-                let fieldExistsQuery = {};
-                fieldExistsQuery[queryKey] = {$exists: true};
-                Object.assign(mongoQuery, fieldExistsQuery);
-              } else if(get(searchParameter, 'code') === queryKey){
-                // otherwise, map the fhirpath to mongo
-                Object.assign(mongoQuery, fhirPathToMongo(searchParameter, queryKey, req))
-              }                
-            })       
-            
-            if(get(Meteor, 'settings.private.debug') === true) { console.log('mongoQuery', JSON.stringify(mongoQuery)); }
-          }) 
-
-          process.env.DEBUG && console.log('Original Url:  ' + req.originalUrl)
-          process.env.DEBUG && console.log('Generated Mongo query: ', mongoQuery);
-          process.env.TRACE && console.log('req', req);
+            process.env.DEBUG && console.log('Original Url:  ' + req.originalUrl)
+            process.env.DEBUG && console.log('Generated Mongo query: ', mongoQuery);
+            process.env.TRACE && console.log('req', req);
+            process.env.DEBUG && console.log('--------------------------------------')
 
 
           logToInboundQueue(req);
-
 
           // res.setHeader("Access-Control-Allow-Origin", "*");
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
           
 
-          let isAuthorized = parseUserAuthorization(req);
-
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
+            let isAuthorized = parseUserAuthorization(req)
 
             let databaseOptions = RestHelpers.generateMongoSearchOptions(req.query, routeResourceType);
 
@@ -1023,29 +1034,61 @@ if(typeof serverRouteManifest === "object"){
               });
             }            
           } else {
-            // Unauthorized
-            JsonRoutes.sendResult(res, {
-              code: 401
-            });
+             console.log('User not authorized...')
+             // enable public access unclassified data
+             if(get(Meteor, 'settings.private.enablePublicUnrestrictedData')){
+              console.log('Providing public unrestricted data instead...')
+              let records = Collections[collectionName].find({'meta.security.display': 'unrestricted'}, {}).fetch();
+
+              let payload = [];
+              records.forEach(function(record){
+                payload.push({
+                  fullUrl: routeResourceType + "/" + get(record, 'id'),
+                  resource: RestHelpers.prepForFhirTransfer(record),
+                  search: {
+                    mode: "match"
+                  }
+                });
+              })      
+              let links = [];
+              links.push({
+                "relation": "self",
+                "url": req.originalUrl
+              });          
+
+              JsonRoutes.sendResult(res, {
+                code: 200,
+                data: Bundle.generate(payload, "searchset", payload.length, links)
+              });
+
+
+            } else {
+              // Unauthorized
+              JsonRoutes.sendResult(res, {
+                code: 401
+              });
+            }
           }
         });
       } else {
+        // NOT IMPLEMENTED
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
           
           JsonRoutes.sendResult(res, {
-            code: 501
+            code: 501  
           });
         });
 
+        // NOT IMPLEMENTED
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
           
           JsonRoutes.sendResult(res, {
-            code: 501
+            code: 501  
           });
         });
       }
@@ -1063,8 +1106,7 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          let isAuthorized = parseUserAuthorization(req);
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
 
             let record;
@@ -1132,9 +1174,7 @@ if(typeof serverRouteManifest === "object"){
 
           let accessTokenStr = get(req, 'params.access_token') || get(req, 'params.access_token');
 
-          let isAuthorized = parseUserAuthorization(req);
-
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
 
           //------------------------------------------------------------------------------------------------
 
@@ -1292,9 +1332,8 @@ if(typeof serverRouteManifest === "object"){
 
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
         
-          let isAuthorized = parseUserAuthorization(req);
         
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
       
             if (req.body) {
               let newRecord = cloneDeep(req.body);
@@ -1570,9 +1609,8 @@ if(typeof serverRouteManifest === "object"){
 
           let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
         
-          let isAuthorized = parseUserAuthorization(req);
         
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {            
+          if (parseUserAuthorization(req)) {            
 
             if (req.body) {
               let incomingRecord = cloneDeep(req.body);
@@ -1695,11 +1733,9 @@ if(typeof serverRouteManifest === "object"){
           
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
-          res.setHeader("ETag", fhirVersion);
+          res.setHeader("ETag", fhirVersion);         
 
-          let isAuthorized = parseUserAuthorization(req);
-
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
             if(get(Meteor, 'settings.private.trace') === true) { 
               console.log('Searching ' + collectionName + ' for ' + req.params.id, Collections[collectionName].find({_id: req.params.id}).count()); 
             }
@@ -1779,9 +1815,8 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          let isAuthorized = parseUserAuthorization(req);
 
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
             let matchingRecords = [];
             let payload = [];
             let searchLimit = 1;
@@ -1983,9 +2018,8 @@ if(typeof serverRouteManifest === "object"){
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           
-          let isAuthorized = parseUserAuthorization(req);
 
-          if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
+          if (parseUserAuthorization(req)) {
 
             let resourceRecords = [];
 
