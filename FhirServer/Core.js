@@ -70,6 +70,20 @@ import {
   InboundRequests
 } from 'meteor/clinical:hl7-fhir-data-infrastructure';
 
+
+//------------------------------------------------------------------------------------------
+import { AccessControl } from 'role-acl';
+
+let accessControlList = [];
+Consents.find({'category.coding.code': 'IDSCL'}).forEach(function(consentRecord){
+  accessControlList.push(FhirUtilities.consentIntoAccessControl(consentRecord));
+})
+
+const acl = new AccessControl(accessControlList);
+
+//------------------------------------------------------------------------------------------
+
+
 import OAuthClientComponents from '../lib/OAuthClients.schema.js';
 
 // console.log("&&&&&&&&&&", OAuthClientComponents.OAuthClients)
@@ -169,7 +183,7 @@ if(Meteor.isServer){
 
 let fhirPath = get(Meteor, 'settings.private.fhir.fhirPath', 'baseR4');
 let fhirVersion = get(Meteor, 'settings.private.fhir.fhirVersion', 'R4');
-let containerAccessToken = get(Meteor, 'settings.private.fhir.accessToken', false);
+let containerAccessTokenOverride = get(Meteor, 'settings.private.fhir.accessToken', false);
 
 if(typeof OAuthServerConfig === 'object'){
   // TODO:  double check that this is needed; and that the /api/ route is correct
@@ -212,20 +226,46 @@ function parseUserAuthorization(req){
       let authParts = decodedAuth.split(":");
       if(authParts[0] && Collections["OAuthClients"]){
         let clientRegistration = Collections["OAuthClients"].findOne({client_id: authParts[0]})
+        console.log('clientRegistration', clientRegistration)
         if(clientRegistration && authParts[1]){
           if(get(clientRegistration, 'client_secret') === authParts[1]){
-            isAuthorized = true;
+            isAuthorized = "healthcare provider";
+            console.log('User presented registered client_secret via Basic Auth. Granting system access.');
 
-            // system access; 
-            // replace with JWT and SMART Backend Services
-          } else if(get(clientRegistration, 'client_secret') === "system:1234567890"){
-            isAuthorized = true;
           }          
-
         }
       } else {
         console.log("For some reason the OAuthClients collection doesn't exist.")
       }
+    }  
+  }
+
+  if(get(Meteor, 'settings.private.enableJwtBackendServices')){
+    if(get(req, "headers.authorization")){
+      let encodedAuth = get(req, "headers.authorization");
+    //   let decodedAuth = base64url.decode(encodedAuth.replace("Basic ", ""))
+    //   console.log('decodedAuth: ' + decodedAuth)
+  
+    //   let authParts = decodedAuth.split(":");
+    //   if(authParts[0] && Collections["OAuthClients"]){
+    //     let clientRegistration = Collections["OAuthClients"].findOne({client_id: authParts[0]})
+    //     if(clientRegistration && authParts[1]){
+    //       if(get(clientRegistration, 'client_secret') === authParts[1]){
+    //         isAuthorized = true;
+
+    //         console.log('User presented registered client_secret via Basic Auth. Granting system access.');
+
+    //         // system access; 
+    //         // replace with JWT and SMART Backend Services
+    //       } else if(get(clientRegistration, 'client_secret') === "system:1234567890"){
+    //         isAuthorized = true;
+    //         console.log('User presented registered client_secret via JWT. Granting system access.');
+    //       }          
+
+    //     }
+    //   } else {
+    //     console.log("For some reason the OAuthClients collection doesn't exist.")
+    //   }
     }  
   }
 
@@ -249,13 +289,14 @@ function parseUserAuthorization(req){
 
     if(accessToken){
       isAuthorized = true;
-    } else if(accessTokenStr === containerAccessToken){
+    } else if(accessTokenStr === containerAccessTokenOverride){
       isAuthorized = true;
     }
   }
 
-
-  // UDAP
+  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+    isAuthorized = true;
+  }
 
   return isAuthorized;
 }
@@ -493,11 +534,19 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-
+          // is this person authorized?
           let isAuthorized = parseUserAuthorization(req);
-  
           if (isAuthorized || process.env.NOAUTH || get(Meteor, 'settings.private.fhir.disableOauth')) {
             if(get(Meteor, 'settings.private.debug') === true) { console.log('Security checks completed'); }
+
+
+            // the person is authorized and known; but do they have permission to access?
+            let userRole = 'citizen';
+            
+            // TODO:  if logged in, user role becomes 'healthcare provider' etc.
+
+
+            // const permission = acl.can(userRole).execute('read').with({confidentiality: 'restricted'}).sync().on(routeResourceType);
 
             let records;
             let lastModified = moment().subtract(100, 'years');
@@ -514,10 +563,28 @@ if(typeof serverRouteManifest === "object"){
                 let jsonPayload = [];
 
                 Collections[collectionName].find(defaultQuery, defaultOptions).forEach(function(record){
-                  jsonPayload.push({
-                    fullUrl: routeResourceType + '/' + get(record, 'id'),
-                    resource: RestHelpers.prepForFhirTransfer(record)
-                  });
+
+                  // check for security labels; otherwise assume normal access patterns
+                  let securityLabel = get(record, 'meta.security[0].display', 'normal');
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
+
+                  if(accessGranted){
+                    jsonPayload.push({
+                      fullUrl: routeResourceType + '/' + get(record, 'id'),
+                      resource: RestHelpers.prepForFhirTransfer(record)
+                    });  
+                  } 
                 });
   
                 process.env.DEBUG && console.log('jsonPayload', jsonPayload);
@@ -534,6 +601,8 @@ if(typeof serverRouteManifest === "object"){
                 
               } else if(["ipfs"].includes(get(req, 'query._outputFormat'))){
                 let jsonPayload = [];
+
+                // what are security access patterns for IPFS?  
 
                 Collections[collectionName].find(defaultQuery, defaultOptions).forEach(function(record){
                   jsonPayload.push(RestHelpers.prepForFhirTransfer(record));
@@ -557,10 +626,7 @@ if(typeof serverRouteManifest === "object"){
                       code: 200,
                       data: exportToIpfsNode()
                     });
-
                   }
-
-
                 } else {
                   JsonRoutes.sendResult(res, {
                     code: 501,
@@ -573,11 +639,13 @@ if(typeof serverRouteManifest === "object"){
                     }
                   });
                 }
-
-                
                 
               // if(["ndjson", "application/ndjson", "application/fhir+ndjson"].includes(get(req, 'query._outputFormat'))){
               } else {
+
+                // BULK DATA EXPORT 
+                // what are security access patterns for bulk data?  
+
                 let ndJsonPayload = "[";
 
                 res.setHeader("content-type", 'application/ndjson');
@@ -613,10 +681,31 @@ if(typeof serverRouteManifest === "object"){
                   res.setHeader("Last-Modified", lastModified);
                   res.setHeader("x-provenance", signProvenance(records[0]));
 
-                  JsonRoutes.sendResult(res, {
-                    code: 200,
-                    data: RestHelpers.prepForFhirTransfer(records[0])
-                  });
+                  // check for security labels; otherwise assume normal access patterns
+                  let securityLabel = get(records[0], 'meta.security[0].display', 'normal');
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
+
+                  if(accessGranted){
+                    JsonRoutes.sendResult(res, {
+                      code: 200,
+                      data: RestHelpers.prepForFhirTransfer(records[0])
+                    });  
+                  } else {
+                    JsonRoutes.sendResult(res, {
+                      code: 403
+                    });  
+                  }
                 } else if (records.length > 1){
                   // Success
                   res.setHeader("Content-type", 'application/fhir+json');
@@ -638,10 +727,6 @@ if(typeof serverRouteManifest === "object"){
                       // this should be the most-recent record
                       // NOTE:  this algorithm breaks if we ever delete a version from history
                       if(parseInt(get(recordVersion, 'meta.versionId')) === records.length){
-                        //if(parseInt(get(recordVersion, 'meta.versionId')) > parseInt(get(records[matchIndex], 'meta.versionId'))){
-                          // remove current 
-                          // pullAt(payload, matchIndex);
-
                           mostRecentRecord = recordVersion;
 
                           if(get(recordVersion, 'meta.lastUpdated')){
@@ -650,28 +735,7 @@ if(typeof serverRouteManifest === "object"){
                               lastModified = moment(get(recordVersion, 'meta.lastUpdated')).toDate();
                             }
                           } 
-
-                        //   // add the most recent
-                        //   payload.push();
-                        // //} 
-                      } 
-
-                      // // if we are doing a versioned history, and pull all of the records
-                      // if(false){
-                      //   payload.push({
-                      //     fullUrl: "Organization/" + get(recordVersion, 'id'),
-                      //     resource: RestHelpers.prepForFhirTransfer(recordVersion),
-                      //     request: {
-                      //       method: "GET",
-                      //       url: '/' + fhirPath + '/' + routeResourceType + '/' + req.params.id
-                      //     },
-                      //     response: {
-                      //       status: "200"
-                      //     }
-                      //   });
-                      // }
-                      
-                      
+                      }                       
                     });  
                     
                     if(hasVersionedLastModified){
@@ -679,13 +743,32 @@ if(typeof serverRouteManifest === "object"){
                     }
                   }
 
-                  res.setHeader("x-provenance", signProvenance(mostRecentRecord));
+                  // check for security labels on the most recent record
+                  let securityLabel = get(mostRecentRecord, 'meta.security[0].display', 'normal');
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
 
-                  JsonRoutes.sendResult(res, {
-                    code: 200,
-                    // data: Bundle.generate(payload)
-                    data: RestHelpers.prepForFhirTransfer(mostRecentRecord)
-                  });
+                  if(accessGranted){
+                    res.setHeader("x-provenance", signProvenance(mostRecentRecord));
+                    JsonRoutes.sendResult(res, {
+                      code: 200, //OK
+                      data: RestHelpers.prepForFhirTransfer(mostRecentRecord)
+                    });  
+                  } else {
+                    JsonRoutes.sendResult(res, {
+                      code: 403 // Forbidden
+                    });    
+                  }
                 }
                 
               } else {
@@ -696,17 +779,14 @@ if(typeof serverRouteManifest === "object"){
                 });
               }
             }
-
-            
-                      
+    
           } else {
             // Unauthorized
             JsonRoutes.sendResult(res, {
               code: 401
             });
           }
-        });
-        
+        });   
         
         // Search Interaction
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
@@ -827,6 +907,11 @@ if(typeof serverRouteManifest === "object"){
 
             if(get(Meteor, 'settings.private.debug') === true) { console.log('CollectionName: ' + collectionName); }
 
+            let userRole = 'citizen';
+            if(typeof isAuthorized === "string"){
+              userRole = isAuthorized;
+            }
+
             let payload = [];
 
             // time to use the generated mongo query and go fetch actual records
@@ -837,17 +922,38 @@ if(typeof serverRouteManifest === "object"){
               // if(get(Meteor, 'settings.private.debug') === true) { console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); }
               process.env.DEBUG && console.log('Found ' + records.length + ' records matching the query on the ' + routeResourceType + ' endpoint.'); 
 
+              console.log('Current userRole: ' + userRole)
               // payload entries
               records.forEach(function(record){
-                let newEntry = {
-                  fullUrl: routeResourceType + "/" + get(record, 'id'),
-                  resource: RestHelpers.prepForFhirTransfer(record),
-                  search: {
-                    mode: "match"
-                  }
-                }
-                payload.push(newEntry);
 
+                // check for security labels; otherwise assume normal access patterns
+                let securityLabel = get(record, 'meta.security[0].display', 'normal');
+                console.log('securityLabel: ' + securityLabel)
+
+                let accessGranted = false;
+                let permission;
+
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){
+                  let newEntry = {
+                    fullUrl: routeResourceType + "/" + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record),
+                    search: {
+                      mode: "match"
+                    }
+                  }
+                  payload.push(newEntry);
+                } 
+
+                
                 // lets check for any _include references
                 // process.env.DEBUG && console.log('req.query', req.query);
                 if(Array.isArray(req.query._include)){
@@ -897,18 +1003,18 @@ if(typeof serverRouteManifest === "object"){
                 "url": req.originalUrl
               });  
 
-              if(totalMatches > payload.length){
-                links.push({
-                  "relation": "next",
-                  "url": fhirPath + "/" + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
-                });  
-              }
+              // // if matches are greater than _count?
+              // if(totalMatches > payload.length){
+              //   links.push({
+              //     "relation": "next",
+              //     "url": fhirPath + "/" + '?_skip=' + (parseInt(databaseOptions.skip) + payload.length)
+              //   });  
+              // }
 
-              
               // Success
               JsonRoutes.sendResult(res, {
                 code: 200,
-                data: Bundle.generate(payload, "searchset", totalMatches, links)
+                data: Bundle.generate(payload, "searchset", payload.length, links)
               });
             } else {
               // Not Implemented
@@ -936,6 +1042,7 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
+
           
           JsonRoutes.sendResult(res, {
             code: 501
@@ -1063,7 +1170,7 @@ if(typeof serverRouteManifest === "object"){
               if(get(newRecord, 'resourceType') !== routeResourceType){
                 // Unsupported Media Type
                 JsonRoutes.sendResult(res, {
-                  code: 415,
+                  code: 415, 
                   data: 'Wrong FHIR Resource.  Please check your endpoint.'
                 });
               } else {
@@ -1694,17 +1801,35 @@ if(typeof serverRouteManifest === "object"){
               let payload = [];
 
               matchingRecords.forEach(function(record){
-                payload.push({
-                  fullUrl: routeResourceType + "/" + get(record, 'id'),
-                  resource: RestHelpers.prepForFhirTransfer(record),
-                  request: {
-                    method: "POST",
-                    url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
-                  },
-                  response: {
-                    status: "200"
-                  }
-                });
+
+                // check for security labels; otherwise assume normal access patterns
+                let securityLabel = get(record, 'meta.security[0].display', 'normal');
+
+                let accessGranted = false;
+                let permission;
+
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){                  
+                    payload.push({
+                    fullUrl: routeResourceType + "/" + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record),
+                    request: {
+                      method: "POST",
+                      url: '/' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)
+                    },
+                    response: {
+                      status: "200"
+                    }
+                  });
+                }                
               });
 
               console.log('payload', payload);
@@ -1877,10 +2002,28 @@ if(typeof serverRouteManifest === "object"){
               let payload = [];
 
               resourceRecords.forEach(function(record){
-                payload.push({
-                  fullUrl: routeResourceType + "/" + get(record, 'id'),
-                  resource: RestHelpers.prepForFhirTransfer(record)
-                });
+
+                // check for security labels; otherwise assume normal access patterns
+                let securityLabel = get(record, 'meta.security[0].display', 'normal');
+                
+                let accessGranted = false;
+                let permission;
+
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){
+                  payload.push({
+                    fullUrl: routeResourceType + "/" + get(record, 'id'),
+                    resource: RestHelpers.prepForFhirTransfer(record)
+                  });  
+                }                                
               });
             }
 
