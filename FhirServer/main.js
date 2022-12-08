@@ -90,7 +90,11 @@ Meteor.startup(function(){
     BrowserPolicy.content.allowOriginForAll("https://fhir.epic.com");
     BrowserPolicy.content.allowOriginForAll("https://fhir-ehr-code.cerner.com");
 
-    BrowserPolicy.content.allowOriginForAll(get(Meteor, 'settings.public.interfaces.symptomaticFhirServer.channel.endpoint'));
+    if(get(Meteor, 'settings.public.interfaces.symptomaticFhirServer.channel.endpoint')){
+      BrowserPolicy.content.allowOriginForAll(get(Meteor, 'settings.public.interfaces.symptomaticFhirServer.channel.endpoint'));
+    } else {
+      console.log('Does not exist:  Meteor.settings.public.interfaces.symptomaticFhirServer.channel.endpoint')
+    }
 
     // BrowserPolicy.content.allowOriginForAll('fhir-timeline.meteorapp.com');
     // BrowserPolicy.content.allowFrameOrigin('fhir-timeline.meteorapp.com');
