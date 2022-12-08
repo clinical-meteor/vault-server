@@ -290,6 +290,10 @@ function parseUserAuthorization(req){
     }
   }
 
+  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+    isAuthorized = true;
+  }
+
   return isAuthorized;
 }
 
@@ -554,9 +558,20 @@ if(typeof serverRouteManifest === "object"){
 
                   // check for security labels; otherwise assume normal access patterns
                   let securityLabel = get(record, 'meta.security[0].display', 'normal');
-                  let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
 
-                  if(permission.granted){
+                  if(accessGranted){
                     jsonPayload.push({
                       fullUrl: routeResourceType + '/' + get(record, 'id'),
                       resource: RestHelpers.prepForFhirTransfer(record)
@@ -660,9 +675,20 @@ if(typeof serverRouteManifest === "object"){
 
                   // check for security labels; otherwise assume normal access patterns
                   let securityLabel = get(records[0], 'meta.security[0].display', 'normal');
-                  let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
-                  
-                  if(permission.granted){
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
+
+                  if(accessGranted){
                     JsonRoutes.sendResult(res, {
                       code: 200,
                       data: RestHelpers.prepForFhirTransfer(records[0])
@@ -711,9 +737,20 @@ if(typeof serverRouteManifest === "object"){
 
                   // check for security labels on the most recent record
                   let securityLabel = get(mostRecentRecord, 'meta.security[0].display', 'normal');
-                  let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
-                  
-                  if(permission.granted){
+                  let accessGranted = false;
+                  let permission;
+  
+                  if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                    accessGranted = true;
+                  } else {
+                    permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                    console.log('permission.granted: ' + permission.granted);
+  
+                    accessGranted = permission.granted;
+                  }
+  
+
+                  if(accessGranted){
                     res.setHeader("x-provenance", signProvenance(mostRecentRecord));
                     JsonRoutes.sendResult(res, {
                       code: 200, //OK
@@ -885,10 +922,19 @@ if(typeof serverRouteManifest === "object"){
                 let securityLabel = get(record, 'meta.security[0].display', 'normal');
                 console.log('securityLabel: ' + securityLabel)
 
-                let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
-                console.log('permission.granted: ' + permission.granted);
+                let accessGranted = false;
+                let permission;
 
-                if(permission.granted){
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){
                   let newEntry = {
                     fullUrl: routeResourceType + "/" + get(record, 'id'),
                     resource: RestHelpers.prepForFhirTransfer(record),
@@ -1750,10 +1796,21 @@ if(typeof serverRouteManifest === "object"){
 
                 // check for security labels; otherwise assume normal access patterns
                 let securityLabel = get(record, 'meta.security[0].display', 'normal');
-                let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
 
-                if(permission.granted){
-                  payload.push({
+                let accessGranted = false;
+                let permission;
+
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){                  
+                    payload.push({
                     fullUrl: routeResourceType + "/" + get(record, 'id'),
                     resource: RestHelpers.prepForFhirTransfer(record),
                     request: {
@@ -1940,9 +1997,20 @@ if(typeof serverRouteManifest === "object"){
 
                 // check for security labels; otherwise assume normal access patterns
                 let securityLabel = get(record, 'meta.security[0].display', 'normal');
-                let permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                
+                let accessGranted = false;
+                let permission;
 
-                if(permission.granted){
+                if (get(Meteor, 'settings.private.fhir.disableAccessControl') === true) {
+                  accessGranted = true;
+                } else {
+                  permission = acl.can(userRole).execute('read').with({confidentiality: securityLabel}).sync().on(routeResourceType);
+                  console.log('permission.granted: ' + permission.granted);
+
+                  accessGranted = permission.granted;
+                }
+
+                if(accessGranted){
                   payload.push({
                     fullUrl: routeResourceType + "/" + get(record, 'id'),
                     resource: RestHelpers.prepForFhirTransfer(record)

@@ -1,6 +1,6 @@
 Package.describe({
     name: 'clinical:vault-server',
-    version: '8.5.1',
+    version: '8.6.2',
     summary: 'Add FHIR API endpoints to your Node on FHIR application.',
     git: 'https://github.com/clinical-meteor/vault-server'
 });
@@ -20,7 +20,7 @@ Package.onUse(function(api) {
 
     api.use('check', 'server');
     api.use('meteorhacks:async@1.0.0', 'server');
-
+    
     // IPFS
     // api.addFiles('IpfsServer/server.js', 'server');
 
@@ -55,6 +55,10 @@ Package.onUse(function(api) {
     api.addFiles('lib/AccessControl.js');
     api.addFiles('lib/Base64.js');
     api.addFiles('lib/Collections.js');
+    
+    api.addFiles('lib/Methods.js');
+
+    api.addFiles('server/https.js', 'server');
 
     api.addFiles('lib/OAuthClients.schema.js', ['client', 'server']);
     api.addFiles('lib/UdapCertificates.schema.js', ['client', 'server']);

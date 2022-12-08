@@ -99,7 +99,7 @@ export function formatPEM(pemString){
 		return pemString;
 	}
 }
-function removeTrailingSlash(inputString){
+export function removeTrailingSlash(inputString){
   let response = "";
 
   if(inputString.slice(-1) === "/"){
@@ -110,7 +110,7 @@ function removeTrailingSlash(inputString){
 
   return response;
 }
-function parseCertAttributes(certActor){
+export function parseCertAttributes(certActor){
   let result = "";
   if(has(certActor, 'attributes')){
     if(Array.isArray(certActor.attributes)){
@@ -121,7 +121,7 @@ function parseCertAttributes(certActor){
   }
   return result;
 }
-const fetchCertificate = (url, certificateArray, callback) => {
+export const fetchCertificate = (url, certificateArray, callback) => {
   if(!certificateArray){
     certificateArray = [];
   }
@@ -251,7 +251,7 @@ const fetchCertificate = (url, certificateArray, callback) => {
     }).on('error', reject);
   });
 }
-function fetchRevokationList(revokationUrl){
+export function fetchRevokationList(revokationUrl){
   return new Promise((resolve, reject) => {
     http.get(revokationUrl, res => {
       const chunks = []
@@ -325,7 +325,7 @@ function fetchRevokationList(revokationUrl){
     }).on('error', reject);
   });
 }
-function certificateIsExpired(validity){
+export function certificateIsExpired(validity){
   let isExpired = false;
 
   if(moment() > moment(get(validity, 'notAfter'))){
@@ -339,7 +339,7 @@ function certificateIsExpired(validity){
 
   return isExpired;
 }
-function certificateIsRevoked(serialNumber, revokationList){
+export function certificateIsRevoked(serialNumber, revokationList){
   let isRevoked = false;
 
   if(revokationList.includes(serialNumber)){
@@ -348,7 +348,7 @@ function certificateIsRevoked(serialNumber, revokationList){
   
   return isRevoked;
 }
-function preParse(request){
+export function preParse(request){
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.EXHAUSTIVE && console.log('Inbound request', request)
     if(InboundChannel){
@@ -364,7 +364,7 @@ function preParse(request){
   }
   return request;
 }
-function fuzzyMatch(redirect_uris, redirectUri){
+export function fuzzyMatch(redirect_uris, redirectUri){
   let fuzzyMatch = false;
   let redirectHostname = new URL(redirectUri);
   process.env.DEBUG && console.log('redirectHostname', redirectHostname.hostname);
@@ -380,7 +380,7 @@ function fuzzyMatch(redirect_uris, redirectUri){
   }
   return fuzzyMatch;
 }
-function setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode){
+export function setRedirectHeader(res, responseType, redirectUri, appState, newAuthorizationCode){
   if(!responseType){
     res.setHeader("Location", redirectUri + "?response_type=unspecified&error=invalid_request&state=" + appState);
   } else if(responseType !== "code"){
