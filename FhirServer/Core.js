@@ -261,7 +261,7 @@ function parseUserAuthorization(req){
 }
 
 
-function preParse(request){
+function logToInboundQueue(request){
   process.env.DEBUG && console.log('request.query', request.query)
   process.env.DEBUG && console.log('request.params', request.params)
   process.env.DEBUG && console.log('request.headers', request.headers)
@@ -436,7 +436,7 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id/_history/:versionId", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('> GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history/' + + req.params.versionId); }
   
-          preParse(req);
+          logToInboundQueue(req);
 
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -488,7 +488,7 @@ if(typeof serverRouteManifest === "object"){
         JsonRoutes.add("get", "/" + fhirPath + "/" + routeResourceType + "/:id", function (req, res, next) {
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
   
-          preParse(req);
+          logToInboundQueue(req);
 
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -811,7 +811,7 @@ if(typeof serverRouteManifest === "object"){
           process.env.TRACE && console.log('req', req);
 
 
-          preParse(req);
+          logToInboundQueue(req);
 
 
           // res.setHeader("Access-Control-Allow-Origin", "*");
@@ -951,7 +951,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('GET /' + fhirPath + '/' + routeResourceType + '/' + req.params.id + '/_history'); }
   
           process.env.TRACE && console.log('req', req);
-          preParse(req);
+          logToInboundQueue(req);
 
           res.setHeader("content-type", 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
@@ -1017,7 +1017,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType); }
 
           process.env.TRACE && console.log('req', req);
-          preParse(req);
+          logToInboundQueue(req);
           
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -1177,7 +1177,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('PUT /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
         
           process.env.TRACE && console.log('req', req);
-          preParse(req);
+          logToInboundQueue(req);
           
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -1455,7 +1455,7 @@ if(typeof serverRouteManifest === "object"){
           process.env.DEBUG && console.log('PATCH /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); 
         
           process.env.TRACE && console.log('req', req);
-          preParse(req);
+          logToInboundQueue(req);
           
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -1584,7 +1584,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('DELETE /' + fhirPath + '/' + routeResourceType + '/' + req.params.id); }
 
           process.env.TRACE && console.log('req', req);
-          preParse(req);
+          logToInboundQueue(req);
           
 
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
@@ -1650,7 +1650,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('POST /' + fhirPath + '/' + routeResourceType + '/' + JSON.stringify(req.query)); }
 
           
-          preParse(req);
+          logToInboundQueue(req);
 
           process.env.DEBUG && console.log('---------------------------------------')
           process.env.DEBUG && console.log('Checking for chained queries (POST)....')
@@ -1836,7 +1836,7 @@ if(typeof serverRouteManifest === "object"){
           if(get(Meteor, 'settings.private.debug') === true) { console.log('params', req.params); }
 
 
-          preParse(req);
+          logToInboundQueue(req);
           
           process.env.DEBUG && console.log('--------------------------------------')
           process.env.DEBUG && console.log('Checking for chained queries (GET)....')
@@ -1909,4 +1909,6 @@ if(typeof serverRouteManifest === "object"){
   });
 
   console.log('FHIR Server is online.');
+} else {
+  console.log('FHIR Server is offline.  Settings file and route manifest not available.');
 }
