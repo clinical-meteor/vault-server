@@ -53,7 +53,7 @@ Package.onUse(function(api) {
     api.addAssets('certs/EMRDirectTestClientSubCA.crt', 'server');
     
     // DDP autopublish 
-    api.addFiles('lib/AccessControl.js');
+    api.addFiles('lib/WebsocketsAccessControl.js');
     api.addFiles('lib/Base64.js');
     api.addFiles('lib/Collections.js');
 
