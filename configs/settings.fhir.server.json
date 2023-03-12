@@ -178,7 +178,13 @@
     "trace": true,
     "enableCronAutomation": true,
     "enableServerStats": false,
+    "enableBasicAuth": false,
     "recordVersioningEnabled": true,
+    "accessControl": {
+      "enableHttpAccessRestrictions": false,
+      "enableRpcAccessRestrictions": false,
+      "enableEhrLaunchContext": false
+    },
     "fhir": {
       "disableOauth": true,
       "schemaValidation": {

@@ -322,7 +322,7 @@ function logToInboundQueue(request){
 
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.TRACE && console.log('Inbound request', request)
-    if(InboundRequests){
+    if(typeof InboundRequests === "object"){
       InboundRequests.insert({
         date: new Date(),
         method: get(request, 'method'),
@@ -331,6 +331,8 @@ function logToInboundQueue(request){
         originalUrl: get(request, 'originalUrl'),
         headers: get(request, 'headers')
       });
+    } else {
+      console.warn("InboundQueue is enabled, but InboundRequest collection is not available.  Thats not suppose to happen.")
     }
   }
 

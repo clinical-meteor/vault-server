@@ -1195,7 +1195,8 @@ Meteor.startup(function() {
                 JsonRoutes.sendResult(res, {
                   code: 412,
                   data: {
-                    "error_message": 'Provided redirect did not match registered redirects...'
+                    "error_message": 'Provided redirect did not match registered redirects...',
+                    "redirect_uri": redirectUri
                   }  
                 });
                 // // IIB3b
