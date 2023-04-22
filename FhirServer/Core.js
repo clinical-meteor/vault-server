@@ -24,6 +24,8 @@ import {
   Bundles,
   CarePlans,
   CareTeams,
+  Claims,
+  ClaimResponses,
   CodeSystems,
   Communications,
   CommunicationRequests,
@@ -43,9 +45,11 @@ import {
   Locations,
   Medications,
   MedicationOrders,
+  MedicationRequests,
   Measures,
-  Networks,
   MeasureReports,
+  Networks,
+  NutritionOrders,
   Observations,
   Organizations,
   OrganizationAffiliations,
@@ -555,6 +559,8 @@ if(typeof serverRouteManifest === "object"){
 
             // the person is authorized and known; but do they have permission to access?
             let userRole = 'citizen';
+
+            let isAuthorizedToExport = get(Meteor, 'settings.private.accessControl.enableBulkExport', false);
             
             // TODO:  if logged in, user role becomes 'healthcare provider' etc.
 
@@ -1160,7 +1166,7 @@ if(typeof serverRouteManifest === "object"){
         });        
       }
 
-      // Update-create 
+      // update-create 
       // https://www.hl7.org/fhir/http.html#create
       if(serverRouteManifest[routeResourceType].interactions.includes('create')){
         JsonRoutes.add("post", "/" + fhirPath + "/" + routeResourceType, function (req, res, next) {
@@ -1235,7 +1241,7 @@ if(typeof serverRouteManifest === "object"){
   
                   Collections[collectionName].insert(newRecord, schemaValidationConfig, function(error, result){
                     if (error) {
-                      if(get(Meteor, 'settings.private.trace') === true) { console.log('PUT /fhir/MeasureReport/' + req.params.id + "[error]", error); }
+                      if(get(Meteor, 'settings.private.trace') === true) { console.log('Insert /' + routeResourceType + '/' + req.params.id + "[error]", error); }
   
                       // Bad Request
                       JsonRoutes.sendResult(res, {
@@ -1332,9 +1338,8 @@ if(typeof serverRouteManifest === "object"){
           res.setHeader('Content-type', 'application/fhir+json;charset=utf-8');
           res.setHeader("ETag", fhirVersion);
 
-          let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
-        
-        
+          // let accessTokenStr = (req.params && req.params.access_token) || (req.query && req.query.access_token);
+                
           if (parseUserAuthorization(req)) {
       
             if (req.body) {
