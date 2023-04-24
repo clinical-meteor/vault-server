@@ -20,7 +20,9 @@ import pvutils from 'pvutils';
 
 import fs from 'fs';
 
-import InboundChannel from '../lib/InboundRequests.schema.js';
+// import InboundChannel from '../lib/InboundRequests.schema.js';
+import { InboundRequests } from 'meteor/clinical:hl7-fhir-data-infrastructure';
+
 
 // import Hex from '@lapo/asn1js/hex';
 // import format from 'ecdsa-sig-formatter';
@@ -348,11 +350,13 @@ export function certificateIsRevoked(serialNumber, revokationList){
   
   return isRevoked;
 }
+
+
 export function preParse(request){
   if(get(Meteor, 'settings.private.fhir.inboundQueue') === true){
     process.env.EXHAUSTIVE && console.log('Inbound request', request)
-    if(InboundChannel){
-      InboundChannel.InboundRequests.insert({
+    if(InboundRequests){
+      InboundRequests.insert({
         date: new Date(),
         method: get(request, 'method'),
         url: get(request, 'url'),
@@ -360,6 +364,8 @@ export function preParse(request){
         query: get(request, 'query'),
         headers: get(request, 'headers')
       });
+    } else {
+      console.log('InboundRequests does not exist.  ')
     }
   }
   return request;
