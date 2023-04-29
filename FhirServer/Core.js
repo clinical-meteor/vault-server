@@ -4,7 +4,7 @@ import fhirPathToMongo from './FhirPath';
 
 
 
-import { get, has, set, unset, cloneDeep, capitalize, findIndex, countBy } from 'lodash';
+import { get, has, set, unset, cloneDeep, capitalize, uniqBy, findIndex, countBy } from 'lodash';
 import moment from 'moment';
 import { Meteor } from 'meteor/meteor';
 import { Random } from 'meteor/random';
@@ -318,6 +318,64 @@ function parseUserAuthorization(req){
   return isAuthorized;
 }
 
+function addIncludes(req, record, payload){
+  // lets check for any _include references
+  process.env.DEBUG && console.log('Found an _include', req.query._include);
+  
+  function parseInclude(_includeRef){
+    let includeParts = _includeRef.split(":");
+    let includeRefBase;
+    
+    if(includeParts.length === 2){
+      includeRefBase = includeParts[1];
+    } else {
+      includeRefBase = includeParts[0];
+    }
+
+    // example:  Task.subject
+    // the field exists in 
+    if(get(record, includeRefBase + ".reference")){
+      console.log("_include reference: ", get(record, includeRefBase + ".reference"))
+
+      let includeReferenceParts = (get(record, includeRefBase + ".reference")).split("/");
+      console.log('includeReferenceParts.length', includeReferenceParts.length);
+
+      let includeCollection;
+      if(includeReferenceParts.length === 2){
+        includeCollection = includeReferenceParts[0];
+      }
+
+      let pluralizedReferenceBase = FhirUtilities.pluralizeResourceName(capitalize(includeCollection));
+      console.log('pluralizedReferenceBase', pluralizedReferenceBase);
+
+      if(Collections[pluralizedReferenceBase]){
+        if(includeReferenceParts.length = 2){
+          let _includeReferenceRecord = Collections[pluralizedReferenceBase].findOne({id: includeReferenceParts[1]})
+          if(_includeReferenceRecord){
+            let newEntry = {
+              fullUrl: get(record, includeRefBase + ".reference"),
+              resource: RestHelpers.prepForFhirTransfer(_includeReferenceRecord),
+              search: {
+                mode: "include"
+              }
+            }
+            payload.push(newEntry);
+          }
+        }
+      }
+    }
+  }
+
+  if(Array.isArray(req.query._include)){
+    req.query._include.forEach(function(_includeRef){
+      parseInclude(_includeRef)      
+    })
+  } else if (typeof req.query._include === "string"){
+    parseInclude(req.query._include)
+  } 
+  // payload = uniqBy(payload, 'resource.id');
+  // console.log('payload.length', payload.length);
+}
 
 function logToInboundQueue(request){
   process.env.DEBUG && console.log('request.query', request.query)
@@ -353,47 +411,52 @@ function signProvenance(record){
     console.log('signProvenance', record)  
   }
 
-  var token = jwt.sign(JSON.stringify(record), privateKey, { algorithm: 'RS256'})
+  let provenanceRecord;
+  if(privateKey){
+    var token = jwt.sign(JSON.stringify(record), privateKey, { algorithm: 'RS256'})
 
-  let provenanceRecord = {
-    resourceType: "Provenance",                  
-    target: [],
-    recorded: new Date(),
-    signature: [{
-      type: [{
-        system: 'urn:iso-astm:E1762-95:2013',
-        code: '1.2.840.10065.1.12.1.14',
-        display: 'Source Signature'
-      }],
-      when: new Date(),
-      who: {
-        display: 'National Directory'
-      },
-      data: token
-    }]
-  }
+    provenanceRecord = {
+      resourceType: "Provenance",                  
+      target: [],
+      recorded: new Date(),
+      signature: [{
+        type: [{
+          system: 'urn:iso-astm:E1762-95:2013',
+          code: '1.2.840.10065.1.12.1.14',
+          display: 'Source Signature'
+        }],
+        when: new Date(),
+        who: {
+          display: 'National Directory'
+        },
+        data: token
+      }]
+    }
 
-  if(Array.isArray(record)){
-    record.forEach(function(rec){
+    if(Array.isArray(record)){
+      record.forEach(function(rec){
+        provenanceRecord.target.push({
+          display: get(rec, 'name', ''),
+          reference: get(rec, 'id'),
+          type: get(rec, 'resourceType'),
+        });  
+      })
+    } else {
       provenanceRecord.target.push({
-        display: get(rec, 'name', ''),
-        reference: get(rec, 'id'),
-        type: get(rec, 'resourceType'),
+        display: get(record, 'name', ''),
+        reference: get(record, 'id'),
+        type: get(record, 'resourceType'),
       });  
-    })
-  } else {
-    provenanceRecord.target.push({
-      display: get(record, 'name', ''),
-      reference: get(record, 'id'),
-      type: get(record, 'resourceType'),
-    });  
-  }
-  
-  if(get(Meteor, 'settings.private.fhir.generateProvenanceIndex')){
-    Provenances.insert(provenanceRecord);
-  }
+    }
+    
+    if(get(Meteor, 'settings.private.fhir.generateProvenanceIndex')){
+      Provenances.insert(provenanceRecord);
+    }
 
-  return JSON.stringify(provenanceRecord)
+    return JSON.stringify(provenanceRecord)  
+  } else {
+    return null;  
+  }  
 }
 
 //==========================================================================================
@@ -699,7 +762,10 @@ if(typeof serverRouteManifest === "object"){
                 } else if (records.length === 1){
                   res.setHeader("Content-type", 'application/fhir+json');
                   res.setHeader("Last-Modified", lastModified);
-                  res.setHeader("x-provenance", signProvenance(records[0]));
+
+                  if(records[0]){
+                    res.setHeader("x-provenance", signProvenance(records[0]));
+                  }
 
                   // check for security labels; otherwise assume normal access patterns
                   let securityLabel = get(records[0], 'meta.security[0].display', 'normal');
@@ -714,8 +780,9 @@ if(typeof serverRouteManifest === "object"){
   
                     accessGranted = permission.granted;
                   }
-  
 
+                  // addIncludes(req, records[0], payload)
+  
                   if(accessGranted){
                     JsonRoutes.sendResult(res, {
                       code: 200,
@@ -743,6 +810,8 @@ if(typeof serverRouteManifest === "object"){
                     records.forEach(function(recordVersion){
                       console.log('recordVersion', recordVersion)
 
+                      addIncludes(req, record, payload)
+
                       // look for a meta.versionId that is equal to the number of records
                       // this should be the most-recent record
                       // NOTE:  this algorithm breaks if we ever delete a version from history
@@ -757,6 +826,9 @@ if(typeof serverRouteManifest === "object"){
                           } 
                       }                       
                     });  
+                    payload = uniqBy(payload, 'resource.id');
+                    // console.log('payload.length', payload.length);
+                  
                     
                     if(hasVersionedLastModified){
                       res.setHeader("Last-Modified", lastModified);
@@ -945,6 +1017,8 @@ if(typeof serverRouteManifest === "object"){
               // payload entries
               records.forEach(function(record){
 
+                // addIncludes(req, record, payload)
+                
                 // check for security labels; otherwise assume normal access patterns
                 let securityLabel = get(record, 'meta.security[0].display', 'normal');
                 console.log('securityLabel: ' + securityLabel)
@@ -975,45 +1049,46 @@ if(typeof serverRouteManifest === "object"){
                 
                 // lets check for any _include references
                 // process.env.DEBUG && console.log('req.query', req.query);
-                if(Array.isArray(req.query._include)){
-                  req.query._include.forEach(function(_includeRef){
-                    let includeParts = _includeRef.split(":");
-                    let referenceBase;
-                    if(includeParts.length === 2){
-                      referenceBase = includeParts[1];
-                    } else if (includeParts.length === 2){
-                      referenceBase = includeParts[0];
-                    }
+                addIncludes(req, record, payload)
+                // if(Array.isArray(req.query._include)){
+                //   req.query._include.forEach(function(_includeRef){
+                //     let includeParts = _includeRef.split(":");
+                //     let referenceBase;
+                //     if(includeParts.length === 2){
+                //       referenceBase = includeParts[1];
+                //     } else if (includeParts.length === 2){
+                //       referenceBase = includeParts[0];
+                //     }
 
-                    if(get(record, referenceBase + ".reference")){
-                      console.log("_include reference: ", get(record, referenceBase + ".reference"))
+                //     if(get(record, referenceBase + ".reference")){
+                //       console.log("_include reference: ", get(record, referenceBase + ".reference"))
 
-                      let includeReferenceParts = (get(record, referenceBase + ".reference")).split("/");
-                      console.log('includeReferenceParts.length', includeReferenceParts.length);
+                //       let includeReferenceParts = (get(record, referenceBase + ".reference")).split("/");
+                //       console.log('includeReferenceParts.length', includeReferenceParts.length);
 
-                      let pluralizedReferenceBase = FhirUtilities.pluralizeResourceName(capitalize(referenceBase));
-                      console.log('pluralizedReferenceBase', pluralizedReferenceBase);
+                //       let pluralizedReferenceBase = FhirUtilities.pluralizeResourceName(capitalize(referenceBase));
+                //       console.log('pluralizedReferenceBase', pluralizedReferenceBase);
 
-                      if(Collections[pluralizedReferenceBase]){
-                        if(includeReferenceParts.length = 2){
-                          let _includeReferenceRecord = Collections[pluralizedReferenceBase].findOne({id: includeReferenceParts[1]})
-                          if(_includeReferenceRecord){
-                            let newEntry = {
-                              fullUrl: get(record, referenceBase + ".reference"),
-                              resource: RestHelpers.prepForFhirTransfer(_includeReferenceRecord),
-                              search: {
-                                mode: "include"
-                              }
-                            }
-                            payload.push(newEntry);
-                          }
-                        }
-                      }
-                    }
-                  })
-                }
+                //       if(Collections[pluralizedReferenceBase]){
+                //         if(includeReferenceParts.length = 2){
+                //           let _includeReferenceRecord = Collections[pluralizedReferenceBase].findOne({id: includeReferenceParts[1]})
+                //           if(_includeReferenceRecord){
+                //             let newEntry = {
+                //               fullUrl: get(record, referenceBase + ".reference"),
+                //               resource: RestHelpers.prepForFhirTransfer(_includeReferenceRecord),
+                //               search: {
+                //                 mode: "include"
+                //               }
+                //             }
+                //             payload.push(newEntry);
+                //           }
+                //         }
+                //       }
+                //     }
+                //   })
+                // }
               });
-
+              payload = uniqBy(payload, 'resource.id');
 
               // add some pagination logic
               let links = [];
@@ -1050,6 +1125,9 @@ if(typeof serverRouteManifest === "object"){
 
               let payload = [];
               records.forEach(function(record){
+
+                addIncludes(req, record, payload)
+
                 payload.push({
                   fullUrl: routeResourceType + "/" + get(record, 'id'),
                   resource: RestHelpers.prepForFhirTransfer(record),
@@ -1057,7 +1135,9 @@ if(typeof serverRouteManifest === "object"){
                     mode: "match"
                   }
                 });
-              })      
+              })   
+              payload = uniqBy(payload, 'resource.id');
+              
               let links = [];
               links.push({
                 "relation": "self",
@@ -1131,6 +1211,8 @@ if(typeof serverRouteManifest === "object"){
             payload = [];
 
             records.forEach(function(recordVersion){
+              addIncludes(req, record, payload)
+
               payload.push({
                 fullUrl: "Organization/" + get(recordVersion, 'id'),
                 resource: RestHelpers.prepForFhirTransfer(recordVersion),
@@ -1148,7 +1230,9 @@ if(typeof serverRouteManifest === "object"){
                   lastModified = moment(get(recordVersion, 'meta.lastUpdated'));
                 }
               } 
-            });  
+            }); 
+            payload = uniqBy(payload, 'resource.id');
+ 
 
             res.setHeader("content-type", 'application/fhir+json');
             if(hasVersionedLastModified){
