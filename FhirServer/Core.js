@@ -49,6 +49,7 @@ import {
   Measures,
   MeasureReports,
   Networks,
+  NutritionIntakes,
   NutritionOrders,
   Observations,
   Organizations,
@@ -162,6 +163,8 @@ if(Meteor.isServer){
   Collections.MedicationOrders = MedicationOrders;
   Collections.Measures = Measures;
   Collections.MeasureReports = MeasureReports;
+  Collections.NutritionIntakes = NutritionIntakes;
+  Collections.NutritionOrders = NutritionOrders;  
   Collections.Patients = Patients;
   Collections.Practitioners = Practitioners;
   Collections.PractitionerRoles = PractitionerRoles;
